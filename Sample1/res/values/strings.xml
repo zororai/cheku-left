@@ -1,0 +1,20 @@
+<resources>
+
+    <string name="app_name">Sample1</string>
+    <string name="testprinterbt2">Test Printer BT 2.0</string>
+    <string name="testprinterbt4">Test Printer BT 4.0</string>
+    <string name="testprinterusb">Test Printer USB</string>
+    <string name="testprinternet">Test Printer NET</string>
+    <string name="tickettype">Ticket Type</string>
+    <string name="tickettype58mm">58MM Ticket</string>
+    <string name="tickettype80mm">80MM Ticket</string>
+    <string name="hardwarefunction">Hardware Function</string>
+    <string name="cutter">Cutter</string>
+    <string name="drawer">Drawer</string>
+    <string name="beeper">Beeper</string>
+    <string name="printcount">Print Count</string>
+    <string name="bitmapcompress">Bitmap Compress</string>
+    <string name="printsuccess">Print Success</string>
+    <string name="printfailed">Print Failed</string>
+
+</resources>
