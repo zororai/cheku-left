@@ -3,10 +3,12 @@ import '../database/database_helper.dart';
 import '../models/sale.dart';
 import '../models/sale_item.dart';
 import '../services/sync_service.dart';
+import '../services/license_service.dart';
 
 class SaleProvider with ChangeNotifier {
   final DatabaseHelper _db = DatabaseHelper.instance;
   final SyncService _syncService = SyncService();
+  final LicenseService _licenseService = LicenseService();
 
   List<Sale> _sales = [];
   List<Sale> _todaySales = [];
@@ -14,9 +16,10 @@ class SaleProvider with ChangeNotifier {
   Map<String, dynamic> _dailySummary = {};
   bool _isLoading = false;
   bool _isSyncing = false;
+  bool _isLicenseLocked = false;
 
   int? _currentButcherId;
-  int? _currentUserId;
+  String? _currentButcherName;
 
   List<Sale> get sales => _sales;
   List<Sale> get todaySales => _todaySales;
@@ -24,12 +27,13 @@ class SaleProvider with ChangeNotifier {
   Map<String, dynamic> get dailySummary => _dailySummary;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
+  bool get isLicenseLocked => _isLicenseLocked;
 
   int get unsyncedCount => _unsyncedSales.length;
 
-  void setCurrentUser({required int butcherId, required int userId}) {
+  void setCurrentUser({required int butcherId, String? butcherName}) {
     _currentButcherId = butcherId;
-    _currentUserId = userId;
+    _currentButcherName = butcherName;
   }
 
   Future<void> loadSales({int? butcherId, int? userId}) async {
@@ -102,11 +106,40 @@ class SaleProvider with ChangeNotifier {
 
       await loadSales(butcherId: butcherId);
 
+      // Increment payment count and check license status
+      final butcherName = _currentButcherName ?? 'Unknown';
+      final licenseStatus = await _licenseService.incrementPaymentCount(
+        butcherId: butcherId,
+        butcherName: butcherName,
+      );
+
+      if (licenseStatus.isLocked) {
+        _isLicenseLocked = true;
+        notifyListeners();
+      }
+
       return saleNumber;
     } catch (e) {
       debugPrint('Error creating sale: $e');
       rethrow;
     }
+  }
+
+  Future<void> checkLicenseStatus({required int butcherId}) async {
+    try {
+      final status = await _licenseService.checkLicenseStatus(
+        butcherId: butcherId,
+      );
+      _isLicenseLocked = status.isLocked;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error checking license: $e');
+    }
+  }
+
+  void setLicenseLocked(bool locked) {
+    _isLicenseLocked = locked;
+    notifyListeners();
   }
 
   Future<SyncResult> syncSales({String? apiToken, int? butcherId}) async {

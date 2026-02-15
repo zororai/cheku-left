@@ -32,6 +32,9 @@ dependencies:
   # Bluetooth Thermal Printer
   print_bluetooth_thermal: ^1.1.1
   permission_handler: ^11.0.1
+  
+  # Device Info for License
+  device_info_plus: ^10.1.0
 
 dev_dependencies:
   flutter_test:

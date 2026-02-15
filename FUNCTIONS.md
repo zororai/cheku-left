@@ -1,10 +1,65 @@
 # Cheku Left POS - Functions Reference
 
 ## Table of Contents
+- [License Lock System](#license-lock-system)
+- [Stock Module Features](#stock-module-features)
 - [Models](#models)
 - [Providers](#providers)
 - [Services](#services)
 - [Database](#database)
+
+---
+
+## License Lock System
+
+The License Lock & SMS Unlock system enforces payment control and prevents unauthorized usage.
+
+| Feature | Description |
+|---------|-------------|
+| **Payment limit tracking** | App usage limited to 20 successful payments |
+| **Automatic lock** | App locks automatically after reaching payment limit |
+| **SMS notification** | Lock event triggers SMS to admin via backend |
+| **Unlock code** | Admin sends 6-digit unlock code to client |
+| **Backend validation** | Unlock code validated server-side only |
+| **Device binding** | Device ID tracked for each license |
+| **Startup verification** | License checked on every app launch |
+
+### Lock Flow
+1. **Sale completed** → Payment count incremented on backend
+2. **Limit reached** → App locks, SMS sent to admin
+3. **Admin receives** → Unlock code in SMS
+4. **Client enters code** → Backend validates, app unlocks
+5. **Counter reset** → Payment count reset to 0
+
+---
+
+## Stock Module Features
+
+The Opening & Closing Stock Module provides daily stock control for butcher operations.
+
+| Feature | Description |
+|---------|-------------|
+| **Open Day with opening stock entry** | Start a new day by recording opening stock (grams) for each product |
+| **Auto-deduct stock from sales** | When a sale is created, sold grams are automatically deducted from stock movements |
+| **Block sales if day not open** | Sales cannot be created unless a stock session is open for the day |
+| **Record closing stock per product** | At end of day, enter physical stock count for each product |
+| **Calculate variance (gain/loss)** | System calculates: `variance = actualClosing - expectedClosing` |
+| **Close day with validation** | Cannot close day until all products have closing stock recorded |
+| **Daily stock report with variance analysis** | Comprehensive report showing opening, sold, expected, actual, and variance per product |
+| **Session history** | View past stock sessions and their reports |
+| **Database migration (v1 → v2)** | Automatic migration adds stock tables to existing databases |
+
+### Daily Flow
+1. **Open Day** → Enter opening stock for all products
+2. **During Day** → Sales auto-deduct from stock
+3. **Close Day** → Enter physical closing stock, review variance, close session
+
+### Variance Formulas
+```
+expectedClosing = openingGrams - soldGrams
+variance = closingGrams - expectedClosing
+varianceValue = (varianceGrams / 1000) * pricePerKg
+```
 
 ---
 
@@ -283,6 +338,53 @@
 
 ---
 
+### LicenseService
+**File:** `lib/services/license_service.dart`
+
+| Function | Return Type | Description |
+|----------|-------------|-------------|
+| `checkLicenseStatus({butcherId})` | `Future<LicenseStatus>` | Checks current license status with backend |
+| `incrementPaymentCount({butcherId, butcherName})` | `Future<LicenseStatus>` | Increments payment count after sale |
+| `submitUnlockCode({butcherId, code})` | `Future<UnlockResult>` | Submits unlock code for validation |
+| `registerDevice({butcherId, butcherName})` | `Future<bool>` | Registers device with backend |
+
+---
+
+### LicenseStatus
+**File:** `lib/services/license_service.dart`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isLocked` | `bool` | Whether app is locked |
+| `remainingPayments` | `int` | Payments remaining before lock |
+| `paymentCount` | `int` | Current payment count |
+| `maxAllowedPayments` | `int` | Maximum allowed payments (default: 20) |
+
+---
+
+### LicenseProvider
+**File:** `lib/providers/license_provider.dart`
+
+| Function | Return Type | Description |
+|----------|-------------|-------------|
+| `setCurrentButcher({butcherId, butcherName})` | `void` | Sets current butcher context |
+| `checkLicenseStatus({butcherId})` | `Future<void>` | Checks license status from backend |
+| `incrementPaymentAndCheck({butcherId, butcherName})` | `Future<LicenseStatus>` | Increments payment and returns status |
+| `submitUnlockCode({butcherId, code})` | `Future<bool>` | Submits unlock code, returns success |
+| `registerDevice({butcherId, butcherName})` | `Future<void>` | Registers device with backend |
+| `clearError()` | `void` | Clears error state |
+
+**Getters:**
+- `status` → `LicenseStatus?`
+- `isLoading` → `bool`
+- `error` → `String?`
+- `isLocked` → `bool`
+- `remainingPayments` → `int`
+- `paymentCount` → `int`
+- `maxPayments` → `int`
+
+---
+
 ## Database
 
 ### DatabaseHelper
@@ -361,9 +463,9 @@
 
 | Category | Count |
 |----------|-------|
-| **Models** | 8 classes |
-| **Providers** | 5 classes |
-| **Services** | 2 classes |
+| **Models** | 10 classes |
+| **Providers** | 6 classes |
+| **Services** | 3 classes |
 | **Database** | 1 helper class |
-| **Screens** | 10 screens |
-| **Total Functions** | ~90+ methods |
+| **Screens** | 11 screens |
+| **Total Functions** | ~100+ methods |
