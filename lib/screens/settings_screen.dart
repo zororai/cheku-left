@@ -84,21 +84,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _pickLogo() async {
-    final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 512,
-      maxHeight: 512,
-    );
+    try {
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+      );
 
-    if (image != null) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final logoFile = File('${appDir.path}/shop_logo.png');
-      await File(image.path).copy(logoFile.path);
+      if (image != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final logoFile = File('${appDir.path}/shop_logo.png');
+        await File(image.path).copy(logoFile.path);
 
-      setState(() {
-        _logoPath = logoFile.path;
-      });
+        setState(() {
+          _logoPath = logoFile.path;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open gallery: $e'),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'OK',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
     }
   }
 

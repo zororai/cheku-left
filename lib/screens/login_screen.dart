@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/license_provider.dart';
 import 'dashboard_screen.dart';
+import 'subscription_expired_screen.dart';
+import 'suspended_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,14 +15,14 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -30,17 +33,50 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _errorMessage = null);
 
     final authProvider = context.read<AuthProvider>();
-    final success = await authProvider.login(
-      _usernameController.text.trim(),
+
+    // Try API login first, fallback to local
+    bool success = await authProvider.loginWithApi(
+      _emailController.text.trim(),
       _passwordController.text,
     );
 
-    if (success && mounted) {
+    // If API fails due to network, try local auth
+    if (!success &&
+        authProvider.authError ==
+            'Network error. Please check your connection.') {
+      success = await authProvider.login(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+    }
+
+    if (!mounted) return;
+
+    if (success) {
+      // Register device on first login
+      final licenseProvider = context.read<LicenseProvider>();
+      if (authProvider.butcherId != null) {
+        await licenseProvider.registerDevice(
+          butcherId: authProvider.butcherId!,
+          butcherName: authProvider.butcherName ?? 'Unknown',
+        );
+      }
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const DashboardScreen()),
       );
-    } else if (mounted) {
-      setState(() => _errorMessage = 'Invalid username or password');
+    } else if (authProvider.isSubscriptionExpired) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SubscriptionExpiredScreen()),
+      );
+    } else if (authProvider.isAccountSuspended) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const SuspendedScreen()),
+      );
+    } else {
+      setState(
+        () => _errorMessage = authProvider.authError ?? 'Invalid credentials',
+      );
     }
   }
 
@@ -104,13 +140,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 24),
                         TextFormField(
-                          controller: _usernameController,
+                          controller: _emailController,
                           style: const TextStyle(color: Colors.white),
+                          keyboardType: TextInputType.emailAddress,
                           decoration: InputDecoration(
-                            labelText: 'Username',
+                            labelText: 'Email',
                             labelStyle: const TextStyle(color: Colors.white70),
                             prefixIcon: const Icon(
-                              Icons.person,
+                              Icons.email,
                               color: Colors.white70,
                             ),
                             filled: true,
@@ -128,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
-                              return 'Please enter username';
+                              return 'Please enter email';
                             }
                             return null;
                           },
@@ -242,7 +279,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
                 const Text(
-                  'Default: admin / admin123',
+                  'Offline mode: admin / admin123',
                   style: TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],

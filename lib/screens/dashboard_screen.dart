@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sale_provider.dart';
 import '../providers/stock_provider.dart';
+import '../providers/license_provider.dart';
+import '../database/database_helper.dart';
+import '../services/connectivity_service.dart';
 import 'login_screen.dart';
 import 'new_sale_screen.dart';
 import 'products_screen.dart';
@@ -20,16 +23,30 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  Map<String, dynamic>? _dailySummary;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = context.read<AuthProvider>();
-      context.read<SaleProvider>().loadSales(butcherId: auth.butcherId);
-      context.read<StockProvider>().loadCurrentSession(
-        butcherId: auth.butcherId,
-      );
+      _loadData();
     });
+  }
+
+  Future<void> _loadData() async {
+    final auth = context.read<AuthProvider>();
+    context.read<SaleProvider>().loadSales(butcherId: auth.butcherId);
+    context.read<StockProvider>().loadCurrentSession(butcherId: auth.butcherId);
+    context.read<LicenseProvider>().checkLicenseStatus(
+      butcherId: auth.butcherId ?? 0,
+    );
+
+    final summary = await DatabaseHelper.instance.getDailySummary(
+      butcherId: auth.butcherId ?? 0,
+    );
+    if (mounted) {
+      setState(() => _dailySummary = summary);
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -82,6 +99,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 2),
         ),
         actions: [
+          ListenableBuilder(
+            listenable: ConnectivityService.instance,
+            builder: (context, _) {
+              final isOnline = ConnectivityService.instance.isOnline;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  color: isOnline
+                      ? Colors.green.withOpacity(0.2)
+                      : Colors.red.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isOnline ? Icons.cloud_done : Icons.cloud_off,
+                      size: 16,
+                      color: isOnline ? Colors.green : Colors.red,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isOnline ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isOnline ? Colors.green : Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: _handleLogout,
@@ -168,6 +219,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
+              _buildStatsRow(context),
               const SizedBox(height: 24),
               const Text(
                 'Quick Actions',
@@ -183,95 +236,238 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 16,
-                  children: [
-                    _DashboardCard(
-                      icon: Icons.add_shopping_cart,
-                      title: 'New Sale',
-                      subtitle: 'Record a sale',
-                      color: const Color(0xFF4CAF50),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NewSaleScreen(),
-                        ),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.inventory_2,
-                      title: 'Products',
-                      subtitle: 'Manage products',
-                      color: const Color(0xFF2196F3),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const ProductsScreen(),
-                        ),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.receipt_long,
-                      title: 'Daily Summary',
-                      subtitle: 'View today\'s sales',
-                      color: const Color(0xFF9C27B0),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const DailySummaryScreen(),
-                        ),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.scale,
-                      title: 'Stock',
-                      subtitle: context.watch<StockProvider>().isDayOpen
-                          ? 'Day Open'
-                          : 'Open Day',
-                      color: const Color(0xFFFF5722),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const StockScreen()),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.sync,
-                      title: 'Sync Sales',
-                      subtitle: '${saleProvider.unsyncedCount} pending',
-                      color: const Color(0xFFFF9800),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SyncScreen()),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.print,
-                      title: 'Printer',
-                      subtitle: 'Connect printer',
-                      color: const Color(0xFF00BCD4),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PrinterScreen(),
-                        ),
-                      ),
-                    ),
-                    _DashboardCard(
-                      icon: Icons.settings,
-                      title: 'Settings',
-                      subtitle: 'App settings',
-                      color: const Color(0xFF607D8B),
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const SettingsScreen(),
-                        ),
-                      ),
-                    ),
-                  ],
+                  children: _buildDashboardCards(
+                    context,
+                    authProvider,
+                    saleProvider,
+                  ),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  List<Widget> _buildDashboardCards(
+    BuildContext context,
+    AuthProvider auth,
+    SaleProvider saleProvider,
+  ) {
+    final stockProvider = context.watch<StockProvider>();
+    final isManagerOrAbove = auth.isAdmin || auth.isOwner || auth.isManager;
+
+    final List<Widget> cards = [];
+
+    // New Sale - available to all
+    cards.add(
+      _DashboardCard(
+        icon: Icons.add_shopping_cart,
+        title: 'New Sale',
+        subtitle: 'Record a sale',
+        color: const Color(0xFF4CAF50),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const NewSaleScreen()),
+        ),
+      ),
+    );
+
+    // Products - manager and above only
+    if (isManagerOrAbove) {
+      cards.add(
+        _DashboardCard(
+          icon: Icons.inventory_2,
+          title: 'Products',
+          subtitle: 'Manage products',
+          color: const Color(0xFF2196F3),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProductsScreen()),
+          ),
+        ),
+      );
+    }
+
+    // Daily Summary - available to all
+    cards.add(
+      _DashboardCard(
+        icon: Icons.receipt_long,
+        title: 'Daily Summary',
+        subtitle: "View today's sales",
+        color: const Color(0xFF9C27B0),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DailySummaryScreen()),
+        ),
+      ),
+    );
+
+    // Stock - manager and above only
+    if (isManagerOrAbove) {
+      cards.add(
+        _DashboardCard(
+          icon: Icons.scale,
+          title: 'Stock',
+          subtitle: stockProvider.isDayOpen ? 'Day Open' : 'Open Day',
+          color: const Color(0xFFFF5722),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const StockScreen()),
+          ),
+        ),
+      );
+    }
+
+    // Sync Sales - manager and above only
+    if (isManagerOrAbove) {
+      cards.add(
+        _DashboardCard(
+          icon: Icons.sync,
+          title: 'Sync Sales',
+          subtitle: '${saleProvider.unsyncedCount} pending',
+          color: const Color(0xFFFF9800),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SyncScreen()),
+          ),
+        ),
+      );
+    }
+
+    // Printer - available to all
+    cards.add(
+      _DashboardCard(
+        icon: Icons.print,
+        title: 'Printer',
+        subtitle: 'Connect printer',
+        color: const Color(0xFF00BCD4),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PrinterScreen()),
+        ),
+      ),
+    );
+
+    // Settings - manager and above only
+    if (isManagerOrAbove) {
+      cards.add(
+        _DashboardCard(
+          icon: Icons.settings,
+          title: 'Settings',
+          subtitle: 'App settings',
+          color: const Color(0xFF607D8B),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          ),
+        ),
+      );
+    }
+
+    return cards;
+  }
+
+  Widget _buildStatsRow(BuildContext context) {
+    final licenseProvider = context.watch<LicenseProvider>();
+    final stockProvider = context.watch<StockProvider>();
+    final saleProvider = context.watch<SaleProvider>();
+
+    final todayTotal = _dailySummary?['total_amount'] ?? 0.0;
+    final todayTransactions = _dailySummary?['total_transactions'] ?? 0;
+    final remainingPayments = licenseProvider.remainingPayments;
+
+    return Row(
+      children: [
+        Expanded(
+          child: _StatCard(
+            icon: Icons.attach_money,
+            label: "Today's Sales",
+            value: '\$${todayTotal.toStringAsFixed(2)}',
+            subValue: '$todayTransactions sales',
+            color: const Color(0xFF4CAF50),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            icon: Icons.payment,
+            label: 'Payments Left',
+            value: '$remainingPayments',
+            subValue: licenseProvider.isLocked ? 'LOCKED' : 'until lock',
+            color: licenseProvider.isLocked
+                ? Colors.red
+                : remainingPayments <= 5
+                ? Colors.orange
+                : const Color(0xFF2196F3),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _StatCard(
+            icon: stockProvider.isDayOpen ? Icons.check_circle : Icons.schedule,
+            label: 'Stock',
+            value: stockProvider.isDayOpen ? 'Open' : 'Closed',
+            subValue: saleProvider.unsyncedCount > 0
+                ? '${saleProvider.unsyncedCount} unsynced'
+                : 'All synced',
+            color: stockProvider.isDayOpen
+                ? const Color(0xFF4CAF50)
+                : const Color(0xFFFF9800),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String subValue;
+  final Color color;
+
+  const _StatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.subValue,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF16213E),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.white70),
+          ),
+          Text(
+            subValue,
+            style: TextStyle(fontSize: 10, color: color.withOpacity(0.7)),
+          ),
+        ],
       ),
     );
   }

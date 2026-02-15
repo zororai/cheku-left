@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pos/main.dart';
+import 'package:cheku_left/main.dart';
 
 void main() {
   testWidgets('App loads correctly', (WidgetTester tester) async {

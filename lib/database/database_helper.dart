@@ -228,6 +228,96 @@ class DatabaseHelper {
     return null;
   }
 
+  Future<void> saveUserFromApi({
+    required int id,
+    required int butcherId,
+    required String email,
+    required String passwordHash,
+    required String fullName,
+    required String role,
+    String? butcherName,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+
+    // Upsert butcher shop
+    final existingShop = await db.query(
+      'butcher_shops',
+      where: 'id = ?',
+      whereArgs: [butcherId],
+    );
+
+    if (existingShop.isEmpty) {
+      await db.insert('butcher_shops', {
+        'id': butcherId,
+        'name': butcherName ?? 'Shop $butcherId',
+        'is_active': 1,
+        'created_at': now,
+      });
+    } else if (butcherName != null) {
+      await db.update(
+        'butcher_shops',
+        {'name': butcherName},
+        where: 'id = ?',
+        whereArgs: [butcherId],
+      );
+    }
+
+    // Upsert user
+    final existingUser = await db.query(
+      'users',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (existingUser.isEmpty) {
+      await db.insert('users', {
+        'id': id,
+        'butcher_id': butcherId,
+        'username': email,
+        'password_hash': passwordHash,
+        'full_name': fullName,
+        'role': role,
+        'is_active': 1,
+        'created_at': now,
+      });
+    } else {
+      await db.update(
+        'users',
+        {
+          'butcher_id': butcherId,
+          'username': email,
+          'password_hash': passwordHash,
+          'full_name': fullName,
+          'role': role,
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  Future<Map<String, dynamic>?> authenticateUserByEmail(
+    String email,
+    String password,
+  ) async {
+    final db = await database;
+    final result = await db.query(
+      'users',
+      where: 'username = ? AND password_hash = ? AND is_active = 1',
+      whereArgs: [email, password],
+    );
+
+    if (result.isNotEmpty) {
+      final user = result.first;
+      final butcherId = user['butcher_id'] as int;
+      final shop = await getButcherShop(butcherId);
+
+      return {...user, 'butcher_shop': shop?.toMap()};
+    }
+    return null;
+  }
+
   Future<List<User>> getUsersByButcher(int butcherId) async {
     final db = await database;
     final result = await db.query(
