@@ -170,7 +170,7 @@ packages:
     source: hosted
     version: "2.7.0"
   file_selector_windows:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: file_selector_windows
       sha256: "62197474ae75893a62df75939c777763d39c2bc5f73ce5b88497208bc269abfd"
@@ -297,7 +297,7 @@ packages:
     source: hosted
     version: "2.11.1"
   image_picker_windows:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: image_picker_windows
       sha256: d248c86554a72b5495a31c56f060cf73a41c7ff541689327b1a7dbccc33adfae

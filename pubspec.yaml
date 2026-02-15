@@ -38,6 +38,8 @@ dependencies:
   
   # Image Picker for Logo
   image_picker: ^1.0.7
+  image_picker_windows: ^0.2.1
+  file_selector_windows: ^0.9.3+2
 
 dev_dependencies:
   flutter_test:
