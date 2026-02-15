@@ -5,6 +5,8 @@ import '../models/sale.dart';
 import '../models/sale_item.dart';
 import '../models/user.dart';
 import '../models/butcher_shop.dart';
+import '../models/stock_session.dart';
+import '../models/stock_movement.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -22,7 +24,12 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, fileName);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 2,
+      onCreate: _createDB,
+      onUpgrade: _upgradeDB,
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
@@ -98,7 +105,48 @@ class DatabaseHelper {
       )
     ''');
 
+    // Stock sessions table for daily open/close
+    await _createStockTables(db);
+
     await _insertDefaultData(db);
+  }
+
+  Future<void> _createStockTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stock_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        butcher_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        open_time TEXT NOT NULL,
+        close_time TEXT,
+        status TEXT DEFAULT 'open',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (butcher_id) REFERENCES butcher_shops (id),
+        FOREIGN KEY (user_id) REFERENCES users (id)
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        opening_grams INTEGER NOT NULL,
+        sold_grams INTEGER DEFAULT 0,
+        closing_grams INTEGER,
+        expected_closing_grams INTEGER NOT NULL,
+        variance_grams INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (session_id) REFERENCES stock_sessions (id),
+        FOREIGN KEY (product_id) REFERENCES products (id)
+      )
+    ''');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createStockTables(db);
+    }
   }
 
   Future<void> _insertDefaultData(Database db) async {
@@ -481,5 +529,223 @@ class DatabaseHelper {
   Future<void> close() async {
     final db = await database;
     db.close();
+  }
+
+  // STOCK SESSION OPERATIONS
+  Future<int> insertStockSession(StockSession session) async {
+    final db = await database;
+    final map = session.toMap();
+    map.remove('id');
+    return await db.insert('stock_sessions', map);
+  }
+
+  Future<StockSession?> getOpenSession({required int butcherId}) async {
+    final db = await database;
+    final result = await db.query(
+      'stock_sessions',
+      where: 'butcher_id = ? AND status = ?',
+      whereArgs: [butcherId, 'open'],
+      orderBy: 'open_time DESC',
+      limit: 1,
+    );
+    if (result.isNotEmpty) {
+      return StockSession.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<StockSession?> getSessionById(int id) async {
+    final db = await database;
+    final result = await db.query(
+      'stock_sessions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (result.isNotEmpty) {
+      return StockSession.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<StockSession?> getTodaySession({required int butcherId}) async {
+    final db = await database;
+    final today = DateTime.now();
+    final startOfDay = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String();
+    final endOfDay = DateTime(
+      today.year,
+      today.month,
+      today.day,
+      23,
+      59,
+      59,
+    ).toIso8601String();
+
+    final result = await db.query(
+      'stock_sessions',
+      where: 'butcher_id = ? AND open_time BETWEEN ? AND ?',
+      whereArgs: [butcherId, startOfDay, endOfDay],
+      orderBy: 'open_time DESC',
+      limit: 1,
+    );
+    if (result.isNotEmpty) {
+      return StockSession.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<List<StockSession>> getAllSessions({int? butcherId}) async {
+    final db = await database;
+    final result = await db.query(
+      'stock_sessions',
+      where: butcherId != null ? 'butcher_id = ?' : null,
+      whereArgs: butcherId != null ? [butcherId] : null,
+      orderBy: 'open_time DESC',
+    );
+    return result.map((map) => StockSession.fromMap(map)).toList();
+  }
+
+  Future<int> closeStockSession(int sessionId, String closeTime) async {
+    final db = await database;
+    return await db.update(
+      'stock_sessions',
+      {'status': 'closed', 'close_time': closeTime},
+      where: 'id = ?',
+      whereArgs: [sessionId],
+    );
+  }
+
+  // STOCK MOVEMENT OPERATIONS
+  Future<int> insertStockMovement(StockMovement movement) async {
+    final db = await database;
+    final map = movement.toMap();
+    map.remove('id');
+    return await db.insert('stock_movements', map);
+  }
+
+  Future<List<StockMovement>> getSessionMovements(int sessionId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT sm.*, p.name as product_name, p.price_per_kg
+      FROM stock_movements sm
+      LEFT JOIN products p ON sm.product_id = p.id
+      WHERE sm.session_id = ?
+      ORDER BY p.name ASC
+    ''',
+      [sessionId],
+    );
+    return result.map((map) => StockMovement.fromMap(map)).toList();
+  }
+
+  Future<StockMovement?> getMovementByProduct(
+    int sessionId,
+    int productId,
+  ) async {
+    final db = await database;
+    final result = await db.query(
+      'stock_movements',
+      where: 'session_id = ? AND product_id = ?',
+      whereArgs: [sessionId, productId],
+    );
+    if (result.isNotEmpty) {
+      return StockMovement.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<int> updateStockMovementSoldGrams(
+    int sessionId,
+    int productId,
+    int additionalGrams,
+  ) async {
+    final db = await database;
+    return await db.rawUpdate(
+      '''
+      UPDATE stock_movements
+      SET sold_grams = sold_grams + ?,
+          expected_closing_grams = opening_grams - (sold_grams + ?)
+      WHERE session_id = ? AND product_id = ?
+    ''',
+      [additionalGrams, additionalGrams, sessionId, productId],
+    );
+  }
+
+  Future<int> updateStockMovementClosing(
+    int movementId,
+    int closingGrams,
+  ) async {
+    final db = await database;
+
+    // First get the movement to calculate variance
+    final movement = await db.query(
+      'stock_movements',
+      where: 'id = ?',
+      whereArgs: [movementId],
+    );
+
+    if (movement.isEmpty) return 0;
+
+    final expectedClosing = movement.first['expected_closing_grams'] as int;
+    final variance = closingGrams - expectedClosing;
+
+    return await db.update(
+      'stock_movements',
+      {'closing_grams': closingGrams, 'variance_grams': variance},
+      where: 'id = ?',
+      whereArgs: [movementId],
+    );
+  }
+
+  Future<Map<String, dynamic>> getStockReport(int sessionId) async {
+    final movements = await getSessionMovements(sessionId);
+
+    int totalOpeningGrams = 0;
+    int totalSoldGrams = 0;
+    int totalExpectedClosingGrams = 0;
+    int totalClosingGrams = 0;
+    int totalVarianceGrams = 0;
+    double totalVarianceValue = 0;
+
+    for (var m in movements) {
+      totalOpeningGrams += m.openingGrams;
+      totalSoldGrams += m.soldGrams;
+      totalExpectedClosingGrams += m.expectedClosingGrams;
+      totalClosingGrams += m.closingGrams ?? 0;
+      totalVarianceGrams += m.varianceGrams ?? 0;
+      if (m.pricePerKg != null && m.varianceGrams != null) {
+        totalVarianceValue += m.calculateVarianceValue(m.pricePerKg!);
+      }
+    }
+
+    return {
+      'movements': movements,
+      'totalOpeningGrams': totalOpeningGrams,
+      'totalSoldGrams': totalSoldGrams,
+      'totalExpectedClosingGrams': totalExpectedClosingGrams,
+      'totalClosingGrams': totalClosingGrams,
+      'totalVarianceGrams': totalVarianceGrams,
+      'totalVarianceValue': totalVarianceValue,
+    };
+  }
+
+  Future<bool> hasUnclosedSession({required int butcherId}) async {
+    final session = await getOpenSession(butcherId: butcherId);
+    return session != null;
+  }
+
+  Future<bool> allMovementsHaveClosingStock(int sessionId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT COUNT(*) as count FROM stock_movements
+      WHERE session_id = ? AND closing_grams IS NULL
+    ''',
+      [sessionId],
+    );
+    return (result.first['count'] as int) == 0;
   }
 }

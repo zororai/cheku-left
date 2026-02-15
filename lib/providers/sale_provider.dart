@@ -51,14 +51,29 @@ class SaleProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> isDayOpen({int? butcherId}) async {
+    final bId = butcherId ?? _currentButcherId;
+    if (bId == null) return false;
+    return await _db.hasUnclosedSession(butcherId: bId);
+  }
+
   Future<String> createSale({
     required int butcherId,
     required int userId,
     required double totalAmount,
     required String paymentMethod,
     required List<SaleItem> items,
+    bool checkStockSession = true,
   }) async {
     try {
+      // Check if day is open (stock session exists)
+      if (checkStockSession) {
+        final dayOpen = await isDayOpen(butcherId: butcherId);
+        if (!dayOpen) {
+          throw Exception('You must open stock for the day first.');
+        }
+      }
+
       final nextNumber = await _db.getNextSaleNumber(butcherId: butcherId);
       final saleNumber = 'CL-${nextNumber.toString().padLeft(4, '0')}';
 
@@ -72,6 +87,19 @@ class SaleProvider with ChangeNotifier {
       );
 
       await _db.insertSale(sale, items);
+
+      // Update stock movements - deduct sold grams
+      final session = await _db.getOpenSession(butcherId: butcherId);
+      if (session != null) {
+        for (var item in items) {
+          await _db.updateStockMovementSoldGrams(
+            session.id!,
+            item.productId,
+            item.weightGrams,
+          );
+        }
+      }
+
       await loadSales(butcherId: butcherId);
 
       return saleNumber;

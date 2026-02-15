@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/sale_provider.dart';
+import '../providers/stock_provider.dart';
 import 'login_screen.dart';
 import 'new_sale_screen.dart';
 import 'products_screen.dart';
@@ -9,6 +10,7 @@ import 'daily_summary_screen.dart';
 import 'sync_screen.dart';
 import 'settings_screen.dart';
 import 'printer_screen.dart';
+import 'stock_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,6 +26,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final auth = context.read<AuthProvider>();
       context.read<SaleProvider>().loadSales(butcherId: auth.butcherId);
+      context.read<StockProvider>().loadCurrentSession(
+        butcherId: auth.butcherId,
+      );
     });
   }
 
@@ -213,6 +218,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         MaterialPageRoute(
                           builder: (_) => const DailySummaryScreen(),
                         ),
+                      ),
+                    ),
+                    _DashboardCard(
+                      icon: Icons.scale,
+                      title: 'Stock',
+                      subtitle: context.watch<StockProvider>().isDayOpen
+                          ? 'Day Open'
+                          : 'Open Day',
+                      color: const Color(0xFFFF5722),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const StockScreen()),
                       ),
                     ),
                     _DashboardCard(

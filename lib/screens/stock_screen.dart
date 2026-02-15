@@ -1,0 +1,743 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/stock_provider.dart';
+import '../providers/product_provider.dart';
+import '../models/product.dart';
+import 'stock_report_screen.dart';
+
+class StockScreen extends StatefulWidget {
+  const StockScreen({super.key});
+
+  @override
+  State<StockScreen> createState() => _StockScreenState();
+}
+
+class _StockScreenState extends State<StockScreen> {
+  final Map<int, TextEditingController> _openingControllers = {};
+  final Map<int, TextEditingController> _closingControllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadData();
+    });
+  }
+
+  Future<void> _loadData() async {
+    final auth = context.read<AuthProvider>();
+    final stockProvider = context.read<StockProvider>();
+    final productProvider = context.read<ProductProvider>();
+
+    stockProvider.setCurrentUser(
+      butcherId: auth.butcherId!,
+      userId: auth.userId!,
+    );
+
+    await Future.wait([
+      stockProvider.loadCurrentSession(butcherId: auth.butcherId),
+      productProvider.loadProducts(butcherId: auth.butcherId),
+    ]);
+
+    _initControllers();
+  }
+
+  void _initControllers() {
+    final stockProvider = context.read<StockProvider>();
+    final productProvider = context.read<ProductProvider>();
+
+    for (var product in productProvider.activeProducts) {
+      _openingControllers[product.id!] = TextEditingController();
+
+      final movement = stockProvider.stockMovements.firstWhere(
+        (m) => m.productId == product.id,
+        orElse: () => throw StateError('No movement'),
+      );
+      _closingControllers[product.id!] = TextEditingController(
+        text: movement.closingGrams?.toString() ?? '',
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    for (var controller in _openingControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _closingControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _openDay() async {
+    final auth = context.read<AuthProvider>();
+    final stockProvider = context.read<StockProvider>();
+    final productProvider = context.read<ProductProvider>();
+    final products = productProvider.activeProducts;
+
+    if (products.isEmpty) {
+      _showError('No active products found. Please add products first.');
+      return;
+    }
+
+    // Show opening stock entry dialog
+    final openingStock = await _showOpeningStockDialog(products);
+    if (openingStock == null) return;
+
+    final success = await stockProvider.openDay(
+      butcherId: auth.butcherId!,
+      userId: auth.userId!,
+      products: products,
+      openingStockGrams: openingStock,
+    );
+
+    if (success) {
+      _showSuccess('Day opened successfully!');
+      _initControllers();
+    } else {
+      _showError(stockProvider.error ?? 'Failed to open day');
+    }
+  }
+
+  Future<Map<int, int>?> _showOpeningStockDialog(List<Product> products) async {
+    final controllers = <int, TextEditingController>{};
+    for (var product in products) {
+      controllers[product.id!] = TextEditingController(text: '0');
+    }
+
+    return showDialog<Map<int, int>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text(
+          'Enter Opening Stock',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final product = products[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        product.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: controllers[product.id!],
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'grams',
+                          hintStyle: TextStyle(color: Colors.white38),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A2E),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('g', style: TextStyle(color: Colors.white70)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final result = <int, int>{};
+              for (var product in products) {
+                final text = controllers[product.id!]?.text ?? '0';
+                result[product.id!] = int.tryParse(text) ?? 0;
+              }
+              Navigator.pop(ctx, result);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F3460),
+            ),
+            child: const Text('Open Day'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _closeDay() async {
+    final stockProvider = context.read<StockProvider>();
+    final session = stockProvider.currentSession;
+
+    if (session == null) {
+      _showError('No open session found');
+      return;
+    }
+
+    // Check if all closing stocks are entered
+    final movements = stockProvider.stockMovements;
+    final missingClosing = movements
+        .where((m) => m.closingGrams == null)
+        .toList();
+
+    if (missingClosing.isNotEmpty) {
+      _showError('Please enter closing stock for all products first.');
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text('Close Day', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Are you sure you want to close today\'s session?',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            _buildVarianceSummary(),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFE94560),
+            ),
+            child: const Text('Close Day'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final success = await stockProvider.closeDay(session.id!);
+      if (success) {
+        _showSuccess('Day closed successfully!');
+        if (mounted) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => StockReportScreen(sessionId: session.id!),
+            ),
+          );
+        }
+      } else {
+        _showError(stockProvider.error ?? 'Failed to close day');
+      }
+    }
+  }
+
+  Widget _buildVarianceSummary() {
+    final stockProvider = context.read<StockProvider>();
+    final variance = stockProvider.totalVarianceGrams;
+    final varianceValue = stockProvider.totalVarianceValue;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A2E),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Total Variance:',
+                style: TextStyle(color: Colors.white70),
+              ),
+              Text(
+                '${variance >= 0 ? '+' : ''}${variance}g',
+                style: TextStyle(
+                  color: variance >= 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Variance Value:',
+                style: TextStyle(color: Colors.white70),
+              ),
+              Text(
+                '\$${varianceValue.abs().toStringAsFixed(2)}',
+                style: TextStyle(
+                  color: varianceValue >= 0 ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateClosingStock(int movementId, int productId) async {
+    final controller = _closingControllers[productId];
+    if (controller == null) return;
+
+    final grams = int.tryParse(controller.text) ?? 0;
+    final stockProvider = context.read<StockProvider>();
+
+    await stockProvider.recordClosingStock(movementId, grams);
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stockProvider = context.watch<StockProvider>();
+    final productProvider = context.watch<ProductProvider>();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF1A1A2E),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF16213E),
+        title: const Text('Stock Management'),
+        actions: [
+          if (stockProvider.currentSession != null)
+            IconButton(
+              icon: const Icon(Icons.history),
+              onPressed: () => _showSessionHistory(),
+              tooltip: 'History',
+            ),
+        ],
+      ),
+      body: stockProvider.isLoading || productProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _buildBody(stockProvider, productProvider),
+    );
+  }
+
+  Widget _buildBody(
+    StockProvider stockProvider,
+    ProductProvider productProvider,
+  ) {
+    final session = stockProvider.currentSession;
+
+    if (session == null) {
+      return _buildOpenDayView();
+    }
+
+    return _buildStockOverview(stockProvider, productProvider);
+  }
+
+  Widget _buildOpenDayView() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined, size: 80, color: Colors.white24),
+          const SizedBox(height: 24),
+          const Text(
+            'No Active Session',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Open a new day to start tracking stock',
+            style: TextStyle(color: Colors.white54),
+          ),
+          const SizedBox(height: 32),
+          ElevatedButton.icon(
+            onPressed: _openDay,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('OPEN DAY'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F3460),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockOverview(
+    StockProvider stockProvider,
+    ProductProvider productProvider,
+  ) {
+    final movements = stockProvider.stockMovements;
+
+    return Column(
+      children: [
+        _buildSessionHeader(stockProvider),
+        Expanded(
+          child: movements.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No stock movements recorded',
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: movements.length,
+                  itemBuilder: (context, index) {
+                    final movement = movements[index];
+                    return _buildMovementCard(movement);
+                  },
+                ),
+        ),
+        _buildBottomActions(stockProvider),
+      ],
+    );
+  }
+
+  Widget _buildSessionHeader(StockProvider stockProvider) {
+    final session = stockProvider.currentSession!;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: const Color(0xFF16213E),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  'DAY OPEN',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Opened: ${_formatTime(session.openTime)}',
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMovementCard(movement) {
+    final isFinalized = movement.closingGrams != null;
+
+    return Card(
+      color: const Color(0xFF16213E),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  movement.productName ?? 'Product ${movement.productId}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (movement.pricePerKg != null)
+                  Text(
+                    '\$${movement.pricePerKg!.toStringAsFixed(2)}/kg',
+                    style: const TextStyle(color: Colors.white54),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildStockColumn(
+                  'Opening',
+                  '${movement.openingGrams}g',
+                  Colors.blue,
+                ),
+                _buildStockColumn(
+                  'Sold',
+                  '${movement.soldGrams}g',
+                  Colors.orange,
+                ),
+                _buildStockColumn(
+                  'Expected',
+                  '${movement.expectedClosingGrams}g',
+                  Colors.white54,
+                ),
+              ],
+            ),
+            const Divider(color: Colors.white24),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _closingControllers[movement.productId],
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Closing Stock (g)',
+                      labelStyle: const TextStyle(color: Colors.white54),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1A2E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    onSubmitted: (_) =>
+                        _updateClosingStock(movement.id!, movement.productId),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton(
+                  onPressed: () =>
+                      _updateClosingStock(movement.id!, movement.productId),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isFinalized
+                        ? Colors.green
+                        : const Color(0xFF0F3460),
+                  ),
+                  child: Text(isFinalized ? 'Update' : 'Save'),
+                ),
+              ],
+            ),
+            if (isFinalized) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Actual Closing: ${movement.closingGrams}g',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  Text(
+                    'Variance: ${movement.varianceDisplay}',
+                    style: TextStyle(
+                      color: (movement.varianceGrams ?? 0) >= 0
+                          ? Colors.green
+                          : Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStockColumn(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: TextStyle(color: color, fontSize: 12)),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomActions(StockProvider stockProvider) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: const Color(0xFF16213E),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                if (stockProvider.currentSession != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StockReportScreen(
+                        sessionId: stockProvider.currentSession!.id!,
+                      ),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.assessment),
+              label: const Text('VIEW REPORT'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0F3460),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _closeDay,
+              icon: const Icon(Icons.close),
+              label: const Text('CLOSE DAY'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSessionHistory() async {
+    final stockProvider = context.read<StockProvider>();
+    final sessions = await stockProvider.getSessionHistory();
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16213E),
+      builder: (ctx) => Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Session History',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: sessions.length,
+              itemBuilder: (context, index) {
+                final session = sessions[index];
+                return ListTile(
+                  leading: Icon(
+                    session.isOpen ? Icons.lock_open : Icons.lock,
+                    color: session.isOpen ? Colors.green : Colors.white54,
+                  ),
+                  title: Text(
+                    _formatDate(session.openTime),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    session.isOpen ? 'In Progress' : 'Closed',
+                    style: TextStyle(
+                      color: session.isOpen ? Colors.green : Colors.white54,
+                    ),
+                  ),
+                  trailing: const Icon(
+                    Icons.chevron_right,
+                    color: Colors.white54,
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            StockReportScreen(sessionId: session.id!),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatTime(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    } catch (e) {
+      return isoDate;
+    }
+  }
+
+  String _formatDate(String isoDate) {
+    try {
+      final date = DateTime.parse(isoDate);
+      return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+    } catch (e) {
+      return isoDate;
+    }
+  }
+}
