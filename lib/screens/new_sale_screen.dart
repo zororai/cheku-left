@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/product_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/sale_provider.dart';
@@ -162,11 +163,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 onPressed: () async {
                   final printService = PrintService.instance;
                   if (printService.isConnected) {
+                    final prefs = await SharedPreferences.getInstance();
+                    final shopAddress = prefs.getString('shop_address');
+                    final shopPhone = prefs.getString('shop_phone');
+
                     final success = await printService.printReceipt(
                       sale: sale,
                       items: saleItems,
                       shopName: auth.butcherName ?? 'Butcher Shop',
                       cashierName: auth.fullName ?? 'Cashier',
+                      shopAddress: shopAddress,
+                      shopPhone: shopPhone,
                     );
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(

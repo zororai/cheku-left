@@ -74,6 +74,8 @@ class PrintService {
     required List<SaleItem> items,
     required String shopName,
     required String cashierName,
+    String? shopAddress,
+    String? shopPhone,
   }) async {
     try {
       if (!_isConnected) {
@@ -100,6 +102,19 @@ class PrintService {
       bytes += 'BUTCHER SHOP'.codeUnits;
       bytes += [0x0A];
       bytes += [0x1B, 0x45, 0x00]; // Bold off
+
+      // Shop address if provided
+      if (shopAddress != null && shopAddress.isNotEmpty) {
+        bytes += shopAddress.codeUnits;
+        bytes += [0x0A];
+      }
+
+      // Shop phone if provided
+      if (shopPhone != null && shopPhone.isNotEmpty) {
+        bytes += 'Tel: $shopPhone'.codeUnits;
+        bytes += [0x0A];
+      }
+
       bytes += '--------------------------------'.codeUnits;
       bytes += [0x0A, 0x0A];
 

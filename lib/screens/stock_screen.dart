@@ -50,13 +50,18 @@ class _StockScreenState extends State<StockScreen> {
     for (var product in productProvider.activeProducts) {
       _openingControllers[product.id!] = TextEditingController();
 
-      final movement = stockProvider.stockMovements.firstWhere(
+      // Find movement if exists, otherwise create empty controller
+      final movements = stockProvider.stockMovements.where(
         (m) => m.productId == product.id,
-        orElse: () => throw StateError('No movement'),
       );
-      _closingControllers[product.id!] = TextEditingController(
-        text: movement.closingGrams?.toString() ?? '',
-      );
+
+      if (movements.isNotEmpty) {
+        _closingControllers[product.id!] = TextEditingController(
+          text: movements.first.closingGrams?.toString() ?? '',
+        );
+      } else {
+        _closingControllers[product.id!] = TextEditingController();
+      }
     }
   }
 
