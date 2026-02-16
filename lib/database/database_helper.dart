@@ -472,6 +472,16 @@ class DatabaseHelper {
     );
   }
 
+  Future<List<SaleItem>> getSaleItems(int saleId) async {
+    final db = await database;
+    final result = await db.query(
+      'sale_items',
+      where: 'sale_id = ?',
+      whereArgs: [saleId],
+    );
+    return result.map((map) => SaleItem.fromMap(map)).toList();
+  }
+
   Future<List<Sale>> getTodaySales({int? butcherId, int? userId}) async {
     final db = await database;
     final today = DateTime.now();
