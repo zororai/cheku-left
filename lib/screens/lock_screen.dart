@@ -40,6 +40,7 @@ class _LockScreenState extends State<LockScreen> {
     final success = await licenseProvider.submitUnlockCode(
       butcherId: butcherId,
       code: _codeController.text.trim(),
+      token: authProvider.token,
     );
 
     setState(() => _isSubmitting = false);
@@ -163,7 +164,7 @@ class _LockScreenState extends State<LockScreen> {
             controller: _codeController,
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
-            maxLength: 6,
+            maxLength: 8,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 28,
@@ -172,7 +173,7 @@ class _LockScreenState extends State<LockScreen> {
             ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
-              hintText: '------',
+              hintText: '--------',
               hintStyle: TextStyle(
                 color: Colors.white.withOpacity(0.3),
                 fontSize: 28,
@@ -205,8 +206,8 @@ class _LockScreenState extends State<LockScreen> {
               if (value == null || value.isEmpty) {
                 return 'Please enter the unlock code';
               }
-              if (value.length != 6) {
-                return 'Code must be 6 digits';
+              if (value.length != 8) {
+                return 'Code must be 8 digits';
               }
               return null;
             },

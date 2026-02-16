@@ -7,7 +7,7 @@ import '../models/sale.dart';
 import '../models/product.dart';
 
 class SyncService {
-  static const String baseUrl = 'https://api.chekuleft.com';
+  static const String baseUrl = 'https://chekuleftpos.co.zw';
   final DatabaseHelper _db = DatabaseHelper.instance;
 
   Future<bool> hasInternetConnection() async {
@@ -70,29 +70,41 @@ class SyncService {
 
   Future<bool> _sendSaleToServer(Sale sale, String? apiToken) async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+      final headers = {'Content-Type': 'application/json', 'Accept': '*/*'};
 
       if (apiToken != null && apiToken.isNotEmpty) {
         headers['Authorization'] = 'Bearer $apiToken';
       }
 
+      // Get sale items from database
+      final saleItems = await _db.getSaleItems(sale.id!);
+
       final body = jsonEncode({
-        'sales': [sale.toJson()],
+        'device_sale_id': '${sale.butcherId}-${sale.id}',
+        'sale_number': sale.saleNumber,
+        'total_amount': sale.totalAmount,
+        'payment_method': sale.paymentMethod,
+        'sale_date': sale.createdAt,
+        'items': saleItems
+            .map(
+              (item) => {
+                'product_id': item.productId,
+                'product_name': item.productName,
+                'weight_grams': item.weightGrams,
+                'price_per_kg': item.pricePerKg,
+                'total_price': item.totalPrice,
+              },
+            )
+            .toList(),
       });
 
       final response = await http
-          .post(
-            Uri.parse('$baseUrl/api/sales/sync'),
-            headers: headers,
-            body: body,
-          )
+          .post(Uri.parse('$baseUrl/api/sales'), headers: headers, body: body)
           .timeout(const Duration(seconds: 30));
 
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
+      debugPrint('Error sending sale to server: $e');
       return false;
     }
   }

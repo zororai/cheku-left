@@ -61,7 +61,7 @@ class UnlockResult {
 }
 
 class LicenseService {
-  static const String _baseUrl = 'https://api.chekuleft.co.zw';
+  static const String _baseUrl = 'https://chekuleftpos.co.zw';
   static const Duration _timeout = Duration(seconds: 30);
 
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
@@ -86,19 +86,24 @@ class LicenseService {
     }
   }
 
-  Future<LicenseStatus> checkLicenseStatus({required int butcherId}) async {
+  Future<LicenseStatus> checkLicenseStatus({
+    required int butcherId,
+    String? token,
+  }) async {
     try {
-      final deviceId = await _getDeviceId();
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
 
       final response = await http
           .get(
-            Uri.parse(
-              '$_baseUrl/api/license/status?butcher_id=$butcherId&device_id=$deviceId',
-            ),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            Uri.parse('$_baseUrl/api/license/status?butcher_id=$butcherId'),
+            headers: headers,
           )
           .timeout(_timeout);
 
@@ -155,21 +160,28 @@ class LicenseService {
   Future<UnlockResult> submitUnlockCode({
     required int butcherId,
     required String code,
+    String? token,
   }) async {
     try {
       final deviceId = await _getDeviceId();
 
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+
       final response = await http
           .post(
             Uri.parse('$_baseUrl/api/license/unlock'),
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
+            headers: headers,
             body: jsonEncode({
               'butcher_id': butcherId,
               'device_id': deviceId,
-              'code': code,
+              'unlock_code': code,
             }),
           )
           .timeout(_timeout);

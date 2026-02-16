@@ -1,7 +1,7 @@
 # Cheku Left POS - Backend API Specification
 
 **Version:** 1.0.0  
-**Base URL:** `https://api.chekuleft.co.zw`  
+**Base URL:** `https://chekuleftpos.co.zw`  
 **Authentication:** Bearer Token (JWT)
 
 ---

@@ -28,7 +28,7 @@ class AuthService {
 
   static const String _tokenKey = 'auth_token';
   static const String _baseUrlKey = 'api_url';
-  static const String _defaultBaseUrl = 'https://api.chekuleft.co.zw';
+  static const String _defaultBaseUrl = 'https://chekuleftpos.co.zw';
 
   Future<String> get _baseUrl async {
     final prefs = await SharedPreferences.getInstance();

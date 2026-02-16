@@ -27,13 +27,19 @@ class LicenseProvider extends ChangeNotifier {
     _currentButcherName = butcherName;
   }
 
-  Future<void> checkLicenseStatus({required int butcherId}) async {
+  Future<void> checkLicenseStatus({
+    required int butcherId,
+    String? token,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _status = await _licenseService.checkLicenseStatus(butcherId: butcherId);
+      _status = await _licenseService.checkLicenseStatus(
+        butcherId: butcherId,
+        token: token,
+      );
 
       if (_status!.isLocked) {
         await _saveLockStatus(true);
@@ -77,6 +83,7 @@ class LicenseProvider extends ChangeNotifier {
   Future<bool> submitUnlockCode({
     required int butcherId,
     required String code,
+    String? token,
   }) async {
     _isLoading = true;
     _error = null;
@@ -86,6 +93,7 @@ class LicenseProvider extends ChangeNotifier {
       final result = await _licenseService.submitUnlockCode(
         butcherId: butcherId,
         code: code,
+        token: token,
       );
 
       if (result.success) {
