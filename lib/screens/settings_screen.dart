@@ -16,6 +16,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _apiUrlController = TextEditingController();
   final _apiTokenController = TextEditingController();
+  final _shopNameController = TextEditingController();
   final _shopAddressController = TextEditingController();
   final _shopPhoneController = TextEditingController();
   bool _isLoading = false;
@@ -31,6 +32,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _apiUrlController.dispose();
     _apiTokenController.dispose();
+    _shopNameController.dispose();
     _shopAddressController.dispose();
     _shopPhoneController.dispose();
     super.dispose();
@@ -42,6 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _apiUrlController.text =
           prefs.getString('api_url') ?? 'https://api.chekuleft.com';
       _apiTokenController.text = prefs.getString('api_token') ?? '';
+      _shopNameController.text = prefs.getString('shop_name') ?? '';
       _shopAddressController.text = prefs.getString('shop_address') ?? '';
       _shopPhoneController.text = prefs.getString('shop_phone') ?? '';
       _logoPath = prefs.getString('shop_logo_path');
@@ -55,6 +58,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('api_url', _apiUrlController.text.trim());
       await prefs.setString('api_token', _apiTokenController.text.trim());
+      await prefs.setString('shop_name', _shopNameController.text.trim());
       await prefs.setString('shop_address', _shopAddressController.text.trim());
       await prefs.setString('shop_phone', _shopPhoneController.text.trim());
       if (_logoPath != null) {
@@ -269,6 +273,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Butcher Name (for receipt)',
+                    style: TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _shopNameController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Enter butcher/shop name',
+                      hintStyle: const TextStyle(color: Colors.white30),
+                      filled: true,
+                      fillColor: const Color(0xFF1A1A2E),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.store,
+                        color: Colors.white60,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'Shop Address',

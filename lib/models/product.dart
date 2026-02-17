@@ -3,6 +3,7 @@ class Product {
   final int butcherId;
   final String name;
   final double pricePerKg;
+  final String unit; // 'kg', 'grams', 'item'
   final bool isActive;
   final String createdAt;
 
@@ -11,9 +12,34 @@ class Product {
     required this.butcherId,
     required this.name,
     required this.pricePerKg,
+    this.unit = 'kg',
     this.isActive = true,
     String? createdAt,
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
+
+  /// Get price label based on unit type
+  String get priceLabel {
+    switch (unit) {
+      case 'grams':
+        return '\$${pricePerKg.toStringAsFixed(2)}/g';
+      case 'item':
+        return '\$${pricePerKg.toStringAsFixed(2)}/item';
+      default:
+        return '\$${pricePerKg.toStringAsFixed(2)}/kg';
+    }
+  }
+
+  /// Get unit display name
+  String get unitDisplay {
+    switch (unit) {
+      case 'grams':
+        return 'Grams';
+      case 'item':
+        return 'Item';
+      default:
+        return 'Kg';
+    }
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -21,6 +47,7 @@ class Product {
       'butcher_id': butcherId,
       'name': name,
       'price_per_kg': pricePerKg,
+      'unit': unit,
       'is_active': isActive ? 1 : 0,
       'created_at': createdAt,
     };
@@ -32,6 +59,7 @@ class Product {
       butcherId: map['butcher_id'] as int,
       name: map['name'] as String,
       pricePerKg: (map['price_per_kg'] as num).toDouble(),
+      unit: map['unit'] as String? ?? 'kg',
       isActive: (map['is_active'] as int) == 1,
       createdAt: map['created_at'] as String,
     );
@@ -42,6 +70,7 @@ class Product {
     int? butcherId,
     String? name,
     double? pricePerKg,
+    String? unit,
     bool? isActive,
     String? createdAt,
   }) {
@@ -50,6 +79,7 @@ class Product {
       butcherId: butcherId ?? this.butcherId,
       name: name ?? this.name,
       pricePerKg: pricePerKg ?? this.pricePerKg,
+      unit: unit ?? this.unit,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
     );

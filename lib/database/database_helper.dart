@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -69,6 +69,7 @@ class DatabaseHelper {
         butcher_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         price_per_kg REAL NOT NULL,
+        unit TEXT DEFAULT 'kg',
         is_active INTEGER DEFAULT 1,
         created_at TEXT NOT NULL,
         FOREIGN KEY (butcher_id) REFERENCES butcher_shops (id)
@@ -146,6 +147,11 @@ class DatabaseHelper {
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createStockTables(db);
+    }
+    if (oldVersion < 3) {
+      await db.execute(
+        "ALTER TABLE products ADD COLUMN unit TEXT DEFAULT 'kg'",
+      );
     }
   }
 

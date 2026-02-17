@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/stock_provider.dart';
 import '../models/product.dart';
 
 class ProductsScreen extends StatefulWidget {
@@ -39,93 +40,128 @@ class _ProductsScreenState extends State<ProductsScreen> {
       text: product?.pricePerKg.toStringAsFixed(2) ?? '',
     );
     final formKey = GlobalKey<FormState>();
+    String selectedUnit = product?.unit ?? 'kg';
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF16213E),
-        title: Text(
-          isEditing ? 'Edit Product' : 'Add Product',
-          style: const TextStyle(color: Colors.white),
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: nameController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Product Name',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1A2E),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter product name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: priceController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
-                ],
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  labelText: 'Price per KG (\$)',
-                  labelStyle: const TextStyle(color: Colors.white70),
-                  prefixText: '\$ ',
-                  prefixStyle: const TextStyle(color: Colors.white70),
-                  filled: true,
-                  fillColor: const Color(0xFF1A1A2E),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter price';
-                  }
-                  final price = double.tryParse(value);
-                  if (price == null || price <= 0) {
-                    return 'Please enter valid price';
-                  }
-                  return null;
-                },
-              ),
-            ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF16213E),
+          title: Text(
+            isEditing ? 'Edit Product' : 'Add Product',
+            style: const TextStyle(color: Colors.white),
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                Navigator.pop(ctx, true);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE94560),
+          content: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Product Name',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1A2E),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter product name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: selectedUnit,
+                  dropdownColor: const Color(0xFF1A1A2E),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Unit Type',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1A2E),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'kg', child: Text('Kilogram (kg)')),
+                    DropdownMenuItem(value: 'grams', child: Text('Grams (g)')),
+                    DropdownMenuItem(value: 'item', child: Text('Item/Piece')),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedUnit = value ?? 'kg';
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(
+                      RegExp(r'^\d*\.?\d{0,2}'),
+                    ),
+                  ],
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: selectedUnit == 'kg'
+                        ? 'Price per KG (\$)'
+                        : selectedUnit == 'grams'
+                        ? 'Price per Gram (\$)'
+                        : 'Price per Item (\$)',
+                    labelStyle: const TextStyle(color: Colors.white70),
+                    prefixText: '\$ ',
+                    prefixStyle: const TextStyle(color: Colors.white70),
+                    filled: true,
+                    fillColor: const Color(0xFF1A1A2E),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter price';
+                    }
+                    final price = double.tryParse(value);
+                    if (price == null || price <= 0) {
+                      return 'Please enter valid price';
+                    }
+                    return null;
+                  },
+                ),
+              ],
             ),
-            child: Text(isEditing ? 'Update' : 'Add'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  Navigator.pop(ctx, true);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE94560),
+              ),
+              child: Text(isEditing ? 'Update' : 'Add'),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -138,6 +174,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
       butcherId: product?.butcherId ?? auth.butcherId!,
       name: nameController.text.trim(),
       pricePerKg: double.parse(priceController.text),
+      unit: selectedUnit,
       isActive: product?.isActive ?? true,
       createdAt: product?.createdAt,
     );
@@ -147,6 +184,24 @@ class _ProductsScreenState extends State<ProductsScreen> {
       success = await provider.updateProduct(newProduct);
     } else {
       success = await provider.addProduct(newProduct);
+
+      // If product was added successfully and there's an open stock session,
+      // add a stock movement for the new product
+      if (success && mounted) {
+        final stockProvider = context.read<StockProvider>();
+        if (stockProvider.isDayOpen) {
+          // Get the newly added product's ID from the reloaded products list
+          final addedProduct = provider.products.firstWhere(
+            (p) =>
+                p.name == newProduct.name &&
+                p.butcherId == newProduct.butcherId,
+            orElse: () => newProduct,
+          );
+          if (addedProduct.id != null) {
+            await stockProvider.addProductToOpenSession(addedProduct.id!);
+          }
+        }
+      }
     }
 
     if (mounted) {
@@ -287,7 +342,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    '\$${product.pricePerKg.toStringAsFixed(2)} / kg',
+                    product.priceLabel,
                     style: TextStyle(
                       color: product.isActive
                           ? const Color(0xFF4CAF50)

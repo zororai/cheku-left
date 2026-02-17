@@ -19,6 +19,7 @@ class NewSaleScreen extends StatefulWidget {
 
 class _NewSaleScreenState extends State<NewSaleScreen> {
   final _weightController = TextEditingController();
+  final _amountReceivedController = TextEditingController();
   Product? _selectedProduct;
 
   @override
@@ -33,6 +34,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   @override
   void dispose() {
     _weightController.dispose();
+    _amountReceivedController.dispose();
     super.dispose();
   }
 
@@ -141,6 +143,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       );
 
       cart.clear();
+      _amountReceivedController.clear();
 
       if (mounted) {
         await showDialog(
@@ -164,13 +167,16 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                   final printService = PrintService.instance;
                   if (printService.isConnected) {
                     final prefs = await SharedPreferences.getInstance();
+                    final shopName = prefs.getString('shop_name');
                     final shopAddress = prefs.getString('shop_address');
                     final shopPhone = prefs.getString('shop_phone');
 
                     final success = await printService.printReceipt(
                       sale: sale,
                       items: saleItems,
-                      shopName: auth.butcherName ?? 'Butcher Shop',
+                      shopName: (shopName != null && shopName.isNotEmpty)
+                          ? shopName
+                          : (auth.butcherName ?? 'Butcher Shop'),
                       cashierName: auth.fullName ?? 'Cashier',
                       shopAddress: shopAddress,
                       shopPhone: shopPhone,
@@ -309,14 +315,17 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       children: [
                         Text(product.name),
                         Text(
-                          '\$${product.pricePerKg.toStringAsFixed(2)}/kg',
+                          product.priceLabel,
                           style: const TextStyle(fontSize: 10),
                         ),
                       ],
                     ),
                     selected: isSelected,
                     onSelected: (_) {
-                      setState(() => _selectedProduct = product);
+                      setState(() {
+                        _selectedProduct = product;
+                        _weightController.clear();
+                      });
                     },
                     selectedColor: const Color(0xFFE94560),
                     backgroundColor: const Color(0xFF1A1A2E),
@@ -338,6 +347,27 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   }
 
   Widget _buildWeightInput() {
+    // Determine input label and suffix based on product unit
+    String inputLabel = 'Enter Weight (grams)';
+    String inputSuffix = 'g';
+
+    if (_selectedProduct != null) {
+      switch (_selectedProduct!.unit) {
+        case 'kg':
+          inputLabel = 'Enter Weight (grams)';
+          inputSuffix = 'g';
+          break;
+        case 'grams':
+          inputLabel = 'Enter Weight (grams)';
+          inputSuffix = 'g';
+          break;
+        case 'item':
+          inputLabel = 'Enter Quantity';
+          inputSuffix = 'pcs';
+          break;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -347,9 +377,9 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Enter Weight (grams)',
-            style: TextStyle(
+          Text(
+            inputLabel,
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -372,7 +402,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                 color: Colors.white.withOpacity(0.3),
                 fontSize: 32,
               ),
-              suffixText: 'g',
+              suffixText: inputSuffix,
               suffixStyle: const TextStyle(fontSize: 24, color: Colors.white70),
               filled: true,
               fillColor: const Color(0xFF1A1A2E),
@@ -393,8 +423,23 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
               padding: const EdgeInsets.only(top: 12),
               child: Builder(
                 builder: (context) {
-                  final weight = int.tryParse(_weightController.text) ?? 0;
-                  final total = (weight / 1000) * _selectedProduct!.pricePerKg;
+                  final value = int.tryParse(_weightController.text) ?? 0;
+                  double total;
+
+                  switch (_selectedProduct!.unit) {
+                    case 'kg':
+                      total = (value / 1000) * _selectedProduct!.pricePerKg;
+                      break;
+                    case 'grams':
+                      total = value * _selectedProduct!.pricePerKg;
+                      break;
+                    case 'item':
+                      total = value * _selectedProduct!.pricePerKg;
+                      break;
+                    default:
+                      total = (value / 1000) * _selectedProduct!.pricePerKg;
+                  }
+
                   return Text(
                     'Total: \$${total.toStringAsFixed(2)}',
                     style: const TextStyle(
@@ -592,6 +637,96 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ),
                   ),
                 ),
+                if (cart.selectedPaymentMethod == 'Cash') ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _amountReceivedController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(
+                              RegExp(r'^\d*\.?\d{0,2}'),
+                            ),
+                          ],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
+                          decoration: InputDecoration(
+                            labelText: 'Amount Received (optional)',
+                            labelStyle: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 14,
+                            ),
+                            hintText: '0.00',
+                            hintStyle: const TextStyle(color: Colors.white30),
+                            prefixText: '\$ ',
+                            prefixStyle: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 18,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFF1A1A2E),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
+                          ),
+                          onChanged: (_) => setState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Builder(
+                        builder: (context) {
+                          final received =
+                              double.tryParse(_amountReceivedController.text) ??
+                              0;
+                          final change = received - cart.totalAmount;
+                          if (received > 0 && change >= 0) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4CAF50).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    'Change',
+                                    style: TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  Text(
+                                    '\$${change.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                      color: Color(0xFF4CAF50),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

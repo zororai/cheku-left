@@ -3,9 +3,10 @@ class SaleItem {
   final int? saleId;
   final int productId;
   final String productName;
-  final int weightGrams;
-  final double pricePerKg;
+  final int weightGrams; // For items, this represents quantity
+  final double pricePerKg; // For items/grams, this is price per unit
   final double totalPrice;
+  final String unit; // 'kg', 'grams', 'item'
 
   SaleItem({
     this.id,
@@ -15,10 +16,22 @@ class SaleItem {
     required this.weightGrams,
     required this.pricePerKg,
     required this.totalPrice,
+    this.unit = 'kg',
   });
 
-  static double calculateTotalPrice(int weightGrams, double pricePerKg) {
-    double result = (weightGrams / 1000) * pricePerKg;
+  /// Calculate total price based on unit type
+  static double calculateTotalPrice(int value, double price, String unit) {
+    double result;
+    switch (unit) {
+      case 'grams':
+        result = value * price;
+        break;
+      case 'item':
+        result = value * price;
+        break;
+      default: // kg
+        result = (value / 1000) * price;
+    }
     return double.parse(result.toStringAsFixed(2));
   }
 

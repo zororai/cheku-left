@@ -268,4 +268,42 @@ class StockProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
+
+  /// Add a stock movement for a newly added product to the current open session
+  Future<bool> addProductToOpenSession(int productId) async {
+    if (_currentSession == null) {
+      return false;
+    }
+
+    try {
+      // Check if movement already exists for this product
+      final existing = await _db.getMovementByProduct(
+        _currentSession!.id!,
+        productId,
+      );
+      if (existing != null) {
+        return true; // Already exists
+      }
+
+      // Create stock movement with 0 opening stock for the new product
+      final movement = StockMovement(
+        sessionId: _currentSession!.id!,
+        productId: productId,
+        openingGrams: 0,
+        soldGrams: 0,
+        expectedClosingGrams: 0,
+      );
+
+      await _db.insertStockMovement(movement);
+
+      // Reload movements to reflect the new product
+      _stockMovements = await _db.getSessionMovements(_currentSession!.id!);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      debugPrint('Error adding product to open session: $e');
+      return false;
+    }
+  }
 }

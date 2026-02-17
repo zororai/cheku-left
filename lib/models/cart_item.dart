@@ -3,7 +3,7 @@ import 'sale_item.dart';
 
 class CartItem {
   final Product product;
-  final int weightGrams;
+  final int weightGrams; // For items, this represents quantity
   final double totalPrice;
 
   CartItem({
@@ -16,6 +16,7 @@ class CartItem {
     double totalPrice = SaleItem.calculateTotalPrice(
       weightGrams,
       product.pricePerKg,
+      product.unit,
     );
     return CartItem(
       product: product,
@@ -31,6 +32,7 @@ class CartItem {
       weightGrams: weightGrams,
       pricePerKg: product.pricePerKg,
       totalPrice: totalPrice,
+      unit: product.unit,
     );
   }
 }
