@@ -112,6 +112,42 @@ class _StockScreenState extends State<StockScreen> {
       controllers[product.id!] = TextEditingController(text: '0');
     }
 
+    // Helper to get unit suffix for display
+    String getUnitSuffix(String unit) {
+      switch (unit) {
+        case 'grams':
+          return 'g';
+        case 'item':
+          return 'pcs';
+        default:
+          return 'kg'; // kg products input in kg
+      }
+    }
+
+    // Helper to get hint text
+    String getHintText(String unit) {
+      switch (unit) {
+        case 'grams':
+          return 'grams';
+        case 'item':
+          return 'quantity';
+        default:
+          return 'kg'; // kg products input in kg
+      }
+    }
+
+    // Helper to convert input value to grams for storage
+    int convertToGrams(String unit, double value) {
+      switch (unit) {
+        case 'kg':
+          return (value * 1000).round(); // Convert kg to grams
+        case 'grams':
+        case 'item':
+        default:
+          return value.round(); // Already in grams or is quantity
+      }
+    }
+
     return showDialog<Map<int, int>>(
       context: context,
       barrierDismissible: false,
@@ -128,25 +164,41 @@ class _StockScreenState extends State<StockScreen> {
             itemCount: products.length,
             itemBuilder: (context, index) {
               final product = products[index];
+              final unitSuffix = getUnitSuffix(product.unit);
+              final hintText = getHintText(product.unit);
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
                       flex: 2,
-                      child: Text(
-                        product.name,
-                        style: const TextStyle(color: Colors.white),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            product.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          Text(
+                            product.priceLabel,
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(
                       child: TextField(
                         controller: controllers[product.id!],
-                        keyboardType: TextInputType.number,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: 'grams',
-                          hintStyle: TextStyle(color: Colors.white38),
+                          hintText: hintText,
+                          hintStyle: const TextStyle(color: Colors.white38),
                           filled: true,
                           fillColor: const Color(0xFF1A1A2E),
                           border: OutlineInputBorder(
@@ -161,7 +213,13 @@ class _StockScreenState extends State<StockScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    const Text('g', style: TextStyle(color: Colors.white70)),
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        unitSuffix,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -178,7 +236,9 @@ class _StockScreenState extends State<StockScreen> {
               final result = <int, int>{};
               for (var product in products) {
                 final text = controllers[product.id!]?.text ?? '0';
-                result[product.id!] = int.tryParse(text) ?? 0;
+                final value = double.tryParse(text) ?? 0;
+                // Convert to grams for kg products, keep as-is for others
+                result[product.id!] = convertToGrams(product.unit, value);
               }
               Navigator.pop(ctx, result);
             },
@@ -315,12 +375,24 @@ class _StockScreenState extends State<StockScreen> {
     );
   }
 
-  Future<void> _updateClosingStock(int movementId, int productId) async {
+  Future<void> _updateClosingStock(
+    int movementId,
+    int productId,
+    String unit,
+  ) async {
     final controller = _closingControllers[productId];
     if (controller == null) return;
 
-    final grams = int.tryParse(controller.text) ?? 0;
+    final value = double.tryParse(controller.text) ?? 0;
     final stockProvider = context.read<StockProvider>();
+
+    // Convert kg to grams for storage
+    int grams;
+    if (unit == 'kg') {
+      grams = (value * 1000).round();
+    } else {
+      grams = value.round();
+    }
 
     await stockProvider.recordClosingStock(movementId, grams);
   }
@@ -490,6 +562,10 @@ class _StockScreenState extends State<StockScreen> {
 
   Widget _buildMovementCard(movement) {
     final isFinalized = movement.closingGrams != null;
+    final unitSuffix = movement.unitSuffix;
+    final closingLabel = movement.unit == 'item'
+        ? 'Closing Stock (pcs)'
+        : 'Closing Stock (${unitSuffix})';
 
     return Card(
       color: const Color(0xFF16213E),
@@ -512,7 +588,7 @@ class _StockScreenState extends State<StockScreen> {
                 ),
                 if (movement.pricePerKg != null)
                   Text(
-                    '\$${movement.pricePerKg!.toStringAsFixed(2)}/kg',
+                    movement.priceLabel,
                     style: const TextStyle(color: Colors.white54),
                   ),
               ],
@@ -522,17 +598,17 @@ class _StockScreenState extends State<StockScreen> {
               children: [
                 _buildStockColumn(
                   'Opening',
-                  '${movement.openingGrams}g',
+                  movement.formatValue(movement.openingGrams),
                   Colors.blue,
                 ),
                 _buildStockColumn(
                   'Sold',
-                  '${movement.soldGrams}g',
+                  movement.formatValue(movement.soldGrams),
                   Colors.orange,
                 ),
                 _buildStockColumn(
                   'Expected',
-                  '${movement.expectedClosingGrams}g',
+                  movement.formatValue(movement.expectedClosingGrams),
                   Colors.white54,
                 ),
               ],
@@ -543,10 +619,12 @@ class _StockScreenState extends State<StockScreen> {
                 Expanded(
                   child: TextField(
                     controller: _closingControllers[movement.productId],
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
                     style: const TextStyle(color: Colors.white),
                     decoration: InputDecoration(
-                      labelText: 'Closing Stock (g)',
+                      labelText: closingLabel,
                       labelStyle: const TextStyle(color: Colors.white54),
                       filled: true,
                       fillColor: const Color(0xFF1A1A2E),
@@ -555,14 +633,20 @@ class _StockScreenState extends State<StockScreen> {
                         borderSide: BorderSide.none,
                       ),
                     ),
-                    onSubmitted: (_) =>
-                        _updateClosingStock(movement.id!, movement.productId),
+                    onSubmitted: (_) => _updateClosingStock(
+                      movement.id!,
+                      movement.productId,
+                      movement.unit,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
-                  onPressed: () =>
-                      _updateClosingStock(movement.id!, movement.productId),
+                  onPressed: () => _updateClosingStock(
+                    movement.id!,
+                    movement.productId,
+                    movement.unit,
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isFinalized
                         ? Colors.green
@@ -578,7 +662,7 @@ class _StockScreenState extends State<StockScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Actual Closing: ${movement.closingGrams}g',
+                    'Actual Closing: ${movement.formatValue(movement.closingGrams!)}',
                     style: const TextStyle(color: Colors.white70),
                   ),
                   Text(

@@ -20,6 +20,8 @@ class NewSaleScreen extends StatefulWidget {
 class _NewSaleScreenState extends State<NewSaleScreen> {
   final _weightController = TextEditingController();
   final _amountReceivedController = TextEditingController();
+  final _buyerNameController = TextEditingController();
+  final _chargeController = TextEditingController();
   Product? _selectedProduct;
 
   @override
@@ -35,6 +37,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
   void dispose() {
     _weightController.dispose();
     _amountReceivedController.dispose();
+    _buyerNameController.dispose();
+    _chargeController.dispose();
     super.dispose();
   }
 
@@ -44,15 +48,34 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
       return;
     }
 
-    final weight = int.tryParse(_weightController.text);
-    if (weight == null || weight <= 0) {
-      _showSnackBar('Please enter valid weight in grams', isError: true);
+    final value = int.tryParse(_weightController.text);
+    if (value == null || value <= 0) {
+      final errorMsg = _selectedProduct!.unit == 'item'
+          ? 'Please enter valid quantity'
+          : 'Please enter valid weight in grams';
+      _showSnackBar(errorMsg, isError: true);
       return;
     }
 
-    context.read<CartProvider>().addItem(_selectedProduct!, weight);
+    context.read<CartProvider>().addItem(_selectedProduct!, value);
     _weightController.clear();
-    _showSnackBar('Added ${_selectedProduct!.name} (${weight}g) to cart');
+
+    // Show appropriate unit in message
+    final unitLabel = _selectedProduct!.unit == 'item' ? 'pcs' : 'g';
+    _showSnackBar('Added ${_selectedProduct!.name} ($value$unitLabel) to cart');
+  }
+
+  /// Get cart item subtitle based on product unit type
+  String _getCartItemSubtitle(item) {
+    final product = item.product;
+    switch (product.unit) {
+      case 'item':
+        return '${item.weightGrams} pcs @ ${product.priceLabel}';
+      case 'grams':
+        return '${item.weightGrams}g @ ${product.priceLabel}';
+      default: // kg
+        return '${item.weightGrams}g @ ${product.priceLabel}';
+    }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -142,8 +165,14 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
         paymentMethod: cart.selectedPaymentMethod,
       );
 
+      // Save buyer info before clearing
+      final buyerName = _buyerNameController.text.trim();
+      final charge = double.tryParse(_chargeController.text) ?? 0;
+
       cart.clear();
       _amountReceivedController.clear();
+      _buyerNameController.clear();
+      _chargeController.clear();
 
       if (mounted) {
         await showDialog(
@@ -180,6 +209,8 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                       cashierName: auth.fullName ?? 'Cashier',
                       shopAddress: shopAddress,
                       shopPhone: shopPhone,
+                      buyerName: buyerName.isNotEmpty ? buyerName : null,
+                      charge: charge > 0 ? charge : null,
                     );
                     if (ctx.mounted) {
                       ScaffoldMessenger.of(ctx).showSnackBar(
@@ -554,7 +585,7 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ),
                   ),
                   subtitle: Text(
-                    '${item.weightGrams}g @ \$${item.product.pricePerKg}/kg',
+                    _getCartItemSubtitle(item),
                     style: const TextStyle(color: Colors.white60),
                   ),
                   trailing: Row(
@@ -727,6 +758,77 @@ class _NewSaleScreenState extends State<NewSaleScreen> {
                     ],
                   ),
                 ],
+                const SizedBox(height: 12),
+                // Optional buyer name and charge fields
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _buyerNameController,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Buyer Name (optional)',
+                          labelStyle: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                          ),
+                          hintText: 'Enter name',
+                          hintStyle: const TextStyle(color: Colors.white30),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A2E),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.person_outline,
+                            color: Colors.white54,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: _chargeController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'^\d*\.?\d{0,2}'),
+                          ),
+                        ],
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Balance/Charge (optional)',
+                          labelStyle: const TextStyle(
+                            color: Colors.white60,
+                            fontSize: 14,
+                          ),
+                          hintText: '0.00',
+                          hintStyle: const TextStyle(color: Colors.white30),
+                          prefixText: '\$ ',
+                          prefixStyle: const TextStyle(color: Colors.white70),
+                          filled: true,
+                          fillColor: const Color(0xFF1A1A2E),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

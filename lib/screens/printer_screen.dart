@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/print_service.dart';
 
@@ -69,7 +70,8 @@ class _PrinterScreenState extends State<PrinterScreen> {
     }
 
     // Check current connection
-    await _printService.checkConnection();
+    final connected = await _printService.checkConnection();
+    debugPrint('Connection status: $connected');
 
     setState(() => _isLoading = false);
   }

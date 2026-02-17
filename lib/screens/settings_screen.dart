@@ -14,8 +14,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _apiUrlController = TextEditingController();
-  final _apiTokenController = TextEditingController();
   final _shopNameController = TextEditingController();
   final _shopAddressController = TextEditingController();
   final _shopPhoneController = TextEditingController();
@@ -30,8 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    _apiUrlController.dispose();
-    _apiTokenController.dispose();
     _shopNameController.dispose();
     _shopAddressController.dispose();
     _shopPhoneController.dispose();
@@ -41,9 +37,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _apiUrlController.text =
-          prefs.getString('api_url') ?? 'https://api.chekuleft.com';
-      _apiTokenController.text = prefs.getString('api_token') ?? '';
       _shopNameController.text = prefs.getString('shop_name') ?? '';
       _shopAddressController.text = prefs.getString('shop_address') ?? '';
       _shopPhoneController.text = prefs.getString('shop_phone') ?? '';
@@ -56,8 +49,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('api_url', _apiUrlController.text.trim());
-      await prefs.setString('api_token', _apiTokenController.text.trim());
       await prefs.setString('shop_name', _shopNameController.text.trim());
       await prefs.setString('shop_address', _shopAddressController.text.trim());
       await prefs.setString('shop_phone', _shopPhoneController.text.trim());
@@ -350,92 +341,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Text(
-              'API Configuration',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16213E),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Server URL',
-                    style: TextStyle(color: Colors.white70),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _saveSettings,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _apiUrlController,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'https://api.example.com',
-                      hintStyle: const TextStyle(color: Colors.white30),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A2E),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      prefixIcon: const Icon(Icons.link, color: Colors.white60),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'API Token',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _apiTokenController,
-                    obscureText: true,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: InputDecoration(
-                      hintText: 'Enter your API token',
-                      hintStyle: const TextStyle(color: Colors.white30),
-                      filled: true,
-                      fillColor: const Color(0xFF1A1A2E),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none,
-                      ),
-                      prefixIcon: const Icon(Icons.key, color: Colors.white60),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _saveSettings,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4CAF50),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
                         ),
-                      ),
-                      child: _isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text('Save Settings'),
-                    ),
-                  ),
-                ],
+                      )
+                    : const Text('Save Settings'),
               ),
             ),
             const SizedBox(height: 24),

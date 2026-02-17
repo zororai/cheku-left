@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:flutter/foundation.dart';
 import '../models/sale.dart';
@@ -76,6 +77,8 @@ class PrintService {
     required String cashierName,
     String? shopAddress,
     String? shopPhone,
+    String? buyerName,
+    double? charge,
   }) async {
     try {
       if (!_isConnected) {
@@ -169,17 +172,42 @@ class PrintService {
       // Payment Method
       bytes += [0x1B, 0x61, 0x01]; // Center
       bytes += 'Payment: ${sale.paymentMethod}'.codeUnits;
-      bytes += [0x0A, 0x0A];
+      bytes += [0x0A];
+
+      // Buyer name and charge (if provided)
+      if ((buyerName != null && buyerName.isNotEmpty) ||
+          (charge != null && charge > 0)) {
+        bytes += '--------------------------------'.codeUnits;
+        bytes += [0x0A];
+        bytes += [0x1B, 0x61, 0x00]; // Left align
+
+        if (buyerName != null && buyerName.isNotEmpty) {
+          bytes += 'Customer: $buyerName'.codeUnits;
+          bytes += [0x0A];
+        }
+
+        if (charge != null && charge > 0) {
+          bytes += [0x1B, 0x45, 0x01]; // Bold on
+          bytes += 'Balance/Charge: \$${charge.toStringAsFixed(2)}'.codeUnits;
+          bytes += [0x0A];
+          bytes += [0x1B, 0x45, 0x00]; // Bold off
+        }
+      }
+      bytes += [0x0A];
 
       // Footer
+      bytes += [0x1B, 0x61, 0x01]; // Center
       bytes += 'Thank you for your purchase!'.codeUnits;
       bytes += [0x0A];
       bytes += 'Visit us again'.codeUnits;
       bytes += [0x0A, 0x0A, 0x0A, 0x0A];
       bytes += [0x1D, 0x56, 0x00]; // Cut
 
-      await PrintBluetoothThermal.writeBytes(bytes);
-      return true;
+      final result = await PrintBluetoothThermal.writeBytes(
+        Uint8List.fromList(bytes),
+      );
+      debugPrint('Print result: $result');
+      return result;
     } catch (e) {
       debugPrint('Error printing receipt: $e');
       return false;
@@ -217,8 +245,11 @@ class PrintService {
       bytes += [0x0A, 0x0A, 0x0A, 0x0A];
       bytes += [0x1D, 0x56, 0x00]; // Cut
 
-      await PrintBluetoothThermal.writeBytes(bytes);
-      return true;
+      final result = await PrintBluetoothThermal.writeBytes(
+        Uint8List.fromList(bytes),
+      );
+      debugPrint('Test print result: $result');
+      return result;
     } catch (e) {
       debugPrint('Error printing test page: $e');
       return false;

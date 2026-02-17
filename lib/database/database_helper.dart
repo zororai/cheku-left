@@ -736,7 +736,7 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery(
       '''
-      SELECT sm.*, p.name as product_name, p.price_per_kg
+      SELECT sm.*, p.name as product_name, p.price_per_kg, p.unit
       FROM stock_movements sm
       LEFT JOIN products p ON sm.product_id = p.id
       WHERE sm.session_id = ?

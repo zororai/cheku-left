@@ -2,9 +2,9 @@ class StockMovement {
   final int? id;
   final int sessionId;
   final int productId;
-  final int openingGrams;
-  final int soldGrams;
-  final int? closingGrams;
+  final int openingGrams; // For items, this represents quantity
+  final int soldGrams; // For items, this represents quantity sold
+  final int? closingGrams; // For items, this represents quantity remaining
   final int expectedClosingGrams;
   final int? varianceGrams;
   final String createdAt;
@@ -12,6 +12,7 @@ class StockMovement {
   // Optional fields for display
   final String? productName;
   final double? pricePerKg;
+  final String unit; // 'kg', 'grams', 'item'
 
   StockMovement({
     this.id,
@@ -25,9 +26,62 @@ class StockMovement {
     String? createdAt,
     this.productName,
     this.pricePerKg,
+    this.unit = 'kg',
   }) : expectedClosingGrams =
            expectedClosingGrams ?? (openingGrams - soldGrams),
        createdAt = createdAt ?? DateTime.now().toIso8601String();
+
+  /// Get the unit suffix for display
+  String get unitSuffix {
+    switch (unit) {
+      case 'grams':
+        return 'g';
+      case 'item':
+        return 'pcs';
+      default:
+        return 'kg'; // Display as kg for kg products
+    }
+  }
+
+  /// Get formatted value with unit (converts grams to kg for kg products)
+  String formatValue(int value) {
+    switch (unit) {
+      case 'kg':
+        // Convert grams to kg for display
+        final kgValue = value / 1000;
+        return '${kgValue.toStringAsFixed(2)}kg';
+      case 'grams':
+        return '${value}g';
+      case 'item':
+        return '${value}pcs';
+      default:
+        final kgVal = value / 1000;
+        return '${kgVal.toStringAsFixed(2)}kg';
+    }
+  }
+
+  /// Get the input value from stored grams (for editing)
+  double getInputValue(int storedValue) {
+    switch (unit) {
+      case 'kg':
+        return storedValue / 1000; // Convert grams to kg
+      default:
+        return storedValue.toDouble();
+    }
+  }
+
+  /// Get price label based on unit
+  String get priceLabel {
+    if (pricePerKg == null) return '';
+    switch (unit) {
+      case 'grams':
+        return '\$${pricePerKg!.toStringAsFixed(2)}/g';
+      case 'item':
+        return '\$${pricePerKg!.toStringAsFixed(2)}/item';
+      default:
+        return '\$${pricePerKg!.toStringAsFixed(2)}/kg';
+    }
+  }
 
   /// Calculate expected closing stock
   static int calculateExpectedClosing(int openingGrams, int soldGrams) {
@@ -74,6 +128,7 @@ class StockMovement {
       pricePerKg: map['price_per_kg'] != null
           ? (map['price_per_kg'] as num).toDouble()
           : null,
+      unit: map['unit'] as String? ?? 'kg',
     );
   }
 
@@ -102,6 +157,7 @@ class StockMovement {
     String? createdAt,
     String? productName,
     double? pricePerKg,
+    String? unit,
   }) {
     return StockMovement(
       id: id ?? this.id,
@@ -115,6 +171,7 @@ class StockMovement {
       createdAt: createdAt ?? this.createdAt,
       productName: productName ?? this.productName,
       pricePerKg: pricePerKg ?? this.pricePerKg,
+      unit: unit ?? this.unit,
     );
   }
 
@@ -124,7 +181,26 @@ class StockMovement {
   /// Get variance as a formatted string
   String get varianceDisplay {
     if (varianceGrams == null) return '-';
-    if (varianceGrams == 0) return '0g';
-    return varianceGrams! > 0 ? '+${varianceGrams}g' : '${varianceGrams}g';
+    if (varianceGrams == 0) return '0$unitSuffix';
+
+    // Format variance based on unit type
+    switch (unit) {
+      case 'kg':
+        final kgValue = varianceGrams! / 1000;
+        return kgValue > 0
+            ? '+${kgValue.toStringAsFixed(2)}kg'
+            : '${kgValue.toStringAsFixed(2)}kg';
+      case 'grams':
+        return varianceGrams! > 0 ? '+${varianceGrams}g' : '${varianceGrams}g';
+      case 'item':
+        return varianceGrams! > 0
+            ? '+${varianceGrams}pcs'
+            : '${varianceGrams}pcs';
+      default:
+        final kgVal = varianceGrams! / 1000;
+        return kgVal > 0
+            ? '+${kgVal.toStringAsFixed(2)}kg'
+            : '${kgVal.toStringAsFixed(2)}kg';
+    }
   }
 }
