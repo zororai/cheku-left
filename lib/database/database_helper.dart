@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -72,6 +72,8 @@ class DatabaseHelper {
         unit TEXT DEFAULT 'kg',
         is_active INTEGER DEFAULT 1,
         created_at TEXT NOT NULL,
+        current_stock_grams INTEGER DEFAULT 0,
+        min_stock_alert_grams INTEGER DEFAULT 0,
         FOREIGN KEY (butcher_id) REFERENCES butcher_shops (id)
       )
     ''');
@@ -151,6 +153,14 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await db.execute(
         "ALTER TABLE products ADD COLUMN unit TEXT DEFAULT 'kg'",
+      );
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE products ADD COLUMN current_stock_grams INTEGER DEFAULT 0',
+      );
+      await db.execute(
+        'ALTER TABLE products ADD COLUMN min_stock_alert_grams INTEGER DEFAULT 0',
       );
     }
   }
@@ -338,7 +348,9 @@ class DatabaseHelper {
   // PRODUCT OPERATIONS
   Future<int> insertProduct(Product product) async {
     final db = await database;
-    return await db.insert('products', product.toMap());
+    final map = product.toMap();
+    map.remove('id');
+    return await db.insert('products', map);
   }
 
   Future<List<Product>> getAllProducts({int? butcherId}) async {
@@ -384,6 +396,91 @@ class DatabaseHelper {
   Future<int> deleteProduct(int id) async {
     final db = await database;
     return await db.delete('products', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // STOCK TRACKING OPERATIONS
+  Future<int> updateProductStock(int productId, int stockGrams) async {
+    final db = await database;
+    return await db.update(
+      'products',
+      {'current_stock_grams': stockGrams},
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+  }
+
+  Future<int> deductProductStock(int productId, int gramsToDeduct) async {
+    final db = await database;
+    return await db.rawUpdate(
+      'UPDATE products SET current_stock_grams = MAX(0, current_stock_grams - ?) WHERE id = ?',
+      [gramsToDeduct, productId],
+    );
+  }
+
+  Future<int> addProductStock(int productId, int gramsToAdd) async {
+    final db = await database;
+    return await db.rawUpdate(
+      'UPDATE products SET current_stock_grams = current_stock_grams + ? WHERE id = ?',
+      [gramsToAdd, productId],
+    );
+  }
+
+  Future<Product?> getProductById(int productId) async {
+    final db = await database;
+    final result = await db.query(
+      'products',
+      where: 'id = ?',
+      whereArgs: [productId],
+    );
+    if (result.isNotEmpty) {
+      return Product.fromMap(result.first);
+    }
+    return null;
+  }
+
+  Future<bool> hasEnoughStock(int productId, int requiredGrams) async {
+    final product = await getProductById(productId);
+    if (product == null) return false;
+    return product.currentStockGrams >= requiredGrams;
+  }
+
+  Future<List<Product>> getOutOfStockProducts({int? butcherId}) async {
+    final db = await database;
+    String where = 'is_active = 1 AND current_stock_grams <= 0';
+    List<dynamic> whereArgs = [];
+
+    if (butcherId != null) {
+      where += ' AND butcher_id = ?';
+      whereArgs.add(butcherId);
+    }
+
+    final result = await db.query(
+      'products',
+      where: where,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      orderBy: 'name ASC',
+    );
+    return result.map((map) => Product.fromMap(map)).toList();
+  }
+
+  Future<List<Product>> getLowStockProducts({int? butcherId}) async {
+    final db = await database;
+    String where =
+        'is_active = 1 AND min_stock_alert_grams > 0 AND current_stock_grams <= min_stock_alert_grams AND current_stock_grams > 0';
+    List<dynamic> whereArgs = [];
+
+    if (butcherId != null) {
+      where += ' AND butcher_id = ?';
+      whereArgs.add(butcherId);
+    }
+
+    final result = await db.query(
+      'products',
+      where: where,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      orderBy: 'name ASC',
+    );
+    return result.map((map) => Product.fromMap(map)).toList();
   }
 
   // SALE OPERATIONS

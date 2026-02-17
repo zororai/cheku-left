@@ -68,6 +68,7 @@ class SaleProvider with ChangeNotifier {
     required String paymentMethod,
     required List<SaleItem> items,
     bool checkStockSession = true,
+    bool checkStockAvailability = true,
   }) async {
     try {
       // Check if day is open (stock session exists)
@@ -75,6 +76,25 @@ class SaleProvider with ChangeNotifier {
         final dayOpen = await isDayOpen(butcherId: butcherId);
         if (!dayOpen) {
           throw Exception('You must open stock for the day first.');
+        }
+      }
+
+      // Check stock availability for all items
+      if (checkStockAvailability) {
+        for (var item in items) {
+          final product = await _db.getProductById(item.productId);
+          if (product == null) {
+            throw Exception('Product not found: ${item.productName}');
+          }
+          if (product.isOutOfStock) {
+            throw Exception('${product.name} is out of stock.');
+          }
+          if (!product.hasEnoughStock(item.weightGrams)) {
+            final available = product.stockDisplay;
+            throw Exception(
+              'Insufficient stock for ${product.name}. Available: $available',
+            );
+          }
         }
       }
 
@@ -102,6 +122,11 @@ class SaleProvider with ChangeNotifier {
             item.weightGrams,
           );
         }
+      }
+
+      // Deduct from product stock
+      for (var item in items) {
+        await _db.deductProductStock(item.productId, item.weightGrams);
       }
 
       await loadSales(butcherId: butcherId);

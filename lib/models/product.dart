@@ -6,6 +6,10 @@ class Product {
   final String unit; // 'kg', 'grams', 'item'
   final bool isActive;
   final String createdAt;
+  final int
+  currentStockGrams; // Current available stock in grams (or quantity for 'item' unit)
+  final int
+  minStockAlertGrams; // Minimum stock level before alert (0 = no alert)
 
   Product({
     this.id,
@@ -15,6 +19,8 @@ class Product {
     this.unit = 'kg',
     this.isActive = true,
     String? createdAt,
+    this.currentStockGrams = 0,
+    this.minStockAlertGrams = 0,
   }) : createdAt = createdAt ?? DateTime.now().toIso8601String();
 
   /// Get price label based on unit type
@@ -41,6 +47,30 @@ class Product {
     }
   }
 
+  /// Check if product is out of stock
+  bool get isOutOfStock => currentStockGrams <= 0;
+
+  /// Check if stock is low (below minimum alert level)
+  bool get isLowStock =>
+      minStockAlertGrams > 0 &&
+      currentStockGrams <= minStockAlertGrams &&
+      currentStockGrams > 0;
+
+  /// Get formatted stock display
+  String get stockDisplay {
+    switch (unit) {
+      case 'grams':
+        return '${currentStockGrams}g';
+      case 'item':
+        return '$currentStockGrams pcs';
+      default:
+        return '${(currentStockGrams / 1000).toStringAsFixed(2)} kg';
+    }
+  }
+
+  /// Check if there's enough stock for a sale
+  bool hasEnoughStock(int requiredGrams) => currentStockGrams >= requiredGrams;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -50,6 +80,8 @@ class Product {
       'unit': unit,
       'is_active': isActive ? 1 : 0,
       'created_at': createdAt,
+      'current_stock_grams': currentStockGrams,
+      'min_stock_alert_grams': minStockAlertGrams,
     };
   }
 
@@ -62,6 +94,8 @@ class Product {
       unit: map['unit'] as String? ?? 'kg',
       isActive: (map['is_active'] as int) == 1,
       createdAt: map['created_at'] as String,
+      currentStockGrams: (map['current_stock_grams'] as int?) ?? 0,
+      minStockAlertGrams: (map['min_stock_alert_grams'] as int?) ?? 0,
     );
   }
 
@@ -73,6 +107,8 @@ class Product {
     String? unit,
     bool? isActive,
     String? createdAt,
+    int? currentStockGrams,
+    int? minStockAlertGrams,
   }) {
     return Product(
       id: id ?? this.id,
@@ -82,6 +118,8 @@ class Product {
       unit: unit ?? this.unit,
       isActive: isActive ?? this.isActive,
       createdAt: createdAt ?? this.createdAt,
+      currentStockGrams: currentStockGrams ?? this.currentStockGrams,
+      minStockAlertGrams: minStockAlertGrams ?? this.minStockAlertGrams,
     );
   }
 }

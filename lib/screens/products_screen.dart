@@ -177,6 +177,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
       unit: selectedUnit,
       isActive: product?.isActive ?? true,
       createdAt: product?.createdAt,
+      currentStockGrams: product?.currentStockGrams ?? 0,
+      minStockAlertGrams: product?.minStockAlertGrams ?? 0,
     );
 
     bool success;

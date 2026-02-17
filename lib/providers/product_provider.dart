@@ -78,4 +78,63 @@ class ProductProvider with ChangeNotifier {
       return false;
     }
   }
+
+  // STOCK MANAGEMENT METHODS
+  Future<bool> updateStock(
+    int productId,
+    int stockGrams, {
+    int? butcherId,
+  }) async {
+    try {
+      await _db.updateProductStock(productId, stockGrams);
+      await loadProducts(butcherId: butcherId ?? _currentButcherId);
+      return true;
+    } catch (e) {
+      debugPrint('Error updating stock: $e');
+      return false;
+    }
+  }
+
+  Future<bool> addStock(int productId, int gramsToAdd, {int? butcherId}) async {
+    try {
+      await _db.addProductStock(productId, gramsToAdd);
+      await loadProducts(butcherId: butcherId ?? _currentButcherId);
+      return true;
+    } catch (e) {
+      debugPrint('Error adding stock: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deductStock(
+    int productId,
+    int gramsToDeduct, {
+    int? butcherId,
+  }) async {
+    try {
+      await _db.deductProductStock(productId, gramsToDeduct);
+      await loadProducts(butcherId: butcherId ?? _currentButcherId);
+      return true;
+    } catch (e) {
+      debugPrint('Error deducting stock: $e');
+      return false;
+    }
+  }
+
+  Future<bool> hasEnoughStock(int productId, int requiredGrams) async {
+    return await _db.hasEnoughStock(productId, requiredGrams);
+  }
+
+  Future<Product?> getProductById(int productId) async {
+    return await _db.getProductById(productId);
+  }
+
+  List<Product> get outOfStockProducts =>
+      _activeProducts.where((p) => p.isOutOfStock).toList();
+
+  List<Product> get lowStockProducts =>
+      _activeProducts.where((p) => p.isLowStock).toList();
+
+  List<Product> get availableProducts =>
+      _activeProducts.where((p) => !p.isOutOfStock).toList();
 }

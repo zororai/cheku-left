@@ -420,6 +420,11 @@ class _StockScreenState extends State<StockScreen> {
         backgroundColor: const Color(0xFF16213E),
         title: const Text('Stock Management'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.inventory),
+            onPressed: () => _showStockInventory(productProvider),
+            tooltip: 'Stock Inventory',
+          ),
           if (stockProvider.currentSession != null)
             IconButton(
               icon: const Icon(Icons.history),
@@ -508,7 +513,7 @@ class _StockScreenState extends State<StockScreen> {
                   },
                 ),
         ),
-        _buildBottomActions(stockProvider),
+        SafeArea(top: false, child: _buildBottomActions(stockProvider)),
       ],
     );
   }
@@ -827,6 +832,303 @@ class _StockScreenState extends State<StockScreen> {
       return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     } catch (e) {
       return isoDate;
+    }
+  }
+
+  void _showStockInventory(ProductProvider productProvider) {
+    final outOfStock = productProvider.outOfStockProducts;
+    final lowStock = productProvider.lowStockProducts;
+    final products = productProvider.activeProducts;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF16213E),
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Text(
+                    'Stock Inventory',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white54),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            if (outOfStock.isNotEmpty)
+              _buildStockAlertBanner(
+                'Out of Stock',
+                '${outOfStock.length} product(s)',
+                Colors.red,
+                Icons.warning,
+              ),
+            if (lowStock.isNotEmpty)
+              _buildStockAlertBanner(
+                'Low Stock',
+                '${lowStock.length} product(s)',
+                Colors.orange,
+                Icons.info,
+              ),
+            Expanded(
+              child: ListView.builder(
+                controller: scrollController,
+                padding: const EdgeInsets.all(16),
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return _buildStockInventoryCard(product, productProvider);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStockAlertBanner(
+    String title,
+    String subtitle,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            title,
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+          const Spacer(),
+          Text(subtitle, style: TextStyle(color: color.withOpacity(0.8))),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockInventoryCard(
+    Product product,
+    ProductProvider productProvider,
+  ) {
+    final isOutOfStock = product.isOutOfStock;
+    final isLowStock = product.isLowStock;
+
+    Color statusColor = Colors.green;
+    String statusText = 'In Stock';
+    if (isOutOfStock) {
+      statusColor = Colors.red;
+      statusText = 'Out of Stock';
+    } else if (isLowStock) {
+      statusColor = Colors.orange;
+      statusText = 'Low Stock';
+    }
+
+    return Card(
+      color: const Color(0xFF1A1A2E),
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        title: Text(
+          product.name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Row(
+          children: [
+            Text(
+              'Stock: ${product.stockDisplay}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                statusText,
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.edit, color: Colors.white54),
+          onPressed: () => _showUpdateStockDialog(product, productProvider),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showUpdateStockDialog(
+    Product product,
+    ProductProvider productProvider,
+  ) async {
+    final stockController = TextEditingController();
+    final minAlertController = TextEditingController(
+      text: product.minStockAlertGrams > 0
+          ? (product.unit == 'kg'
+                ? (product.minStockAlertGrams / 1000).toString()
+                : product.minStockAlertGrams.toString())
+          : '',
+    );
+
+    String getUnitSuffix() {
+      switch (product.unit) {
+        case 'grams':
+          return 'g';
+        case 'item':
+          return 'pcs';
+        default:
+          return 'kg';
+      }
+    }
+
+    final result = await showDialog<Map<String, int>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF16213E),
+        title: Text(
+          'Update Stock: ${product.name}',
+          style: const TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Current Stock: ${product.stockDisplay}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: stockController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Add Stock (${getUnitSuffix()})',
+                labelStyle: const TextStyle(color: Colors.white54),
+                hintText: 'Enter quantity to add',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1A1A2E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: minAlertController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Min Stock Alert (${getUnitSuffix()})',
+                labelStyle: const TextStyle(color: Colors.white54),
+                hintText: 'Alert when stock falls below',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: const Color(0xFF1A1A2E),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final stockValue = double.tryParse(stockController.text) ?? 0;
+              final minAlertValue =
+                  double.tryParse(minAlertController.text) ?? 0;
+
+              int stockGrams;
+              int minAlertGrams;
+
+              if (product.unit == 'kg') {
+                stockGrams = (stockValue * 1000).round();
+                minAlertGrams = (minAlertValue * 1000).round();
+              } else {
+                stockGrams = stockValue.round();
+                minAlertGrams = minAlertValue.round();
+              }
+
+              Navigator.pop(ctx, {
+                'addStock': stockGrams,
+                'minAlert': minAlertGrams,
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F3460),
+            ),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      final auth = context.read<AuthProvider>();
+
+      if (result['addStock']! > 0) {
+        await productProvider.addStock(
+          product.id!,
+          result['addStock']!,
+          butcherId: auth.butcherId,
+        );
+      }
+
+      if (result['minAlert'] != product.minStockAlertGrams) {
+        final updated = product.copyWith(
+          minStockAlertGrams: result['minAlert'],
+        );
+        await productProvider.updateProduct(updated);
+      }
+
+      if (mounted) {
+        _showSuccess('Stock updated successfully!');
+      }
     }
   }
 }
