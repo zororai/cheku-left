@@ -24,6 +24,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   Future<void> _checkPermissionsAndScan() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     // Request Bluetooth permissions
@@ -39,6 +40,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
     );
 
     if (!allGranted) {
+      if (!mounted) return;
       setState(() {
         _statusMessage = 'Bluetooth permissions required';
         _isLoading = false;
@@ -50,6 +52,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
   }
 
   Future<void> _scanDevices() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _statusMessage = 'Scanning for printers...';
@@ -57,6 +60,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
     try {
       final devices = await _printService.getBondedDevices();
+      if (!mounted) return;
       setState(() {
         _devices = devices;
         _statusMessage = devices.isEmpty
@@ -64,6 +68,7 @@ class _PrinterScreenState extends State<PrinterScreen> {
             : '${devices.length} printer(s) found';
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _statusMessage = 'Error scanning: $e';
       });
@@ -73,10 +78,15 @@ class _PrinterScreenState extends State<PrinterScreen> {
     final connected = await _printService.checkConnection();
     debugPrint('Connection status: $connected');
 
-    setState(() => _isLoading = false);
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      // Force UI rebuild with latest connection status
+    });
   }
 
   Future<void> _connectToDevice(PrinterDevice device) async {
+    if (!mounted) return;
     setState(() {
       _isConnecting = true;
       _statusMessage = 'Connecting to ${device.name}...';
@@ -84,26 +94,36 @@ class _PrinterScreenState extends State<PrinterScreen> {
 
     final success = await _printService.connect(device);
 
+    // Verify connection after connecting
+    if (success) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      await _printService.checkConnection();
+    }
+
+    if (!mounted) return;
     setState(() {
       _isConnecting = false;
       _statusMessage = success
           ? 'Connected to ${device.name}'
-          : 'Failed to connect to ${device.name}';
+          : 'Failed to connect to ${device.name}. Make sure printer is ON and in range.';
     });
   }
 
   Future<void> _disconnect() async {
     await _printService.disconnect();
+    if (!mounted) return;
     setState(() {
       _statusMessage = 'Disconnected';
     });
   }
 
   Future<void> _printTestPage() async {
+    if (!mounted) return;
     setState(() => _statusMessage = 'Printing test page...');
 
     final success = await _printService.printTestPage();
 
+    if (!mounted) return;
     setState(() {
       _statusMessage = success
           ? 'Test page printed!'

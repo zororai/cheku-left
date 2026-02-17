@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:flutter/foundation.dart';
 import '../models/sale.dart';
@@ -37,15 +36,29 @@ class PrintService {
 
   Future<bool> connect(PrinterDevice device) async {
     try {
+      // First disconnect any existing connection
+      await PrintBluetoothThermal.disconnect;
+
+      // Small delay before reconnecting
+      await Future.delayed(const Duration(milliseconds: 500));
+
       final result = await PrintBluetoothThermal.connect(
         macPrinterAddress: device.address,
       );
-      _connectedDevice = device;
-      _isConnected = result;
+
+      if (result) {
+        _connectedDevice = device;
+        _isConnected = true;
+        debugPrint('Successfully connected to ${device.name}');
+      } else {
+        _isConnected = false;
+        debugPrint('Failed to connect to ${device.name}');
+      }
       return result;
     } catch (e) {
       debugPrint('Error connecting to printer: $e');
       _isConnected = false;
+      _connectedDevice = null;
       return false;
     }
   }
@@ -63,11 +76,26 @@ class PrintService {
   Future<bool> checkConnection() async {
     try {
       _isConnected = await PrintBluetoothThermal.connectionStatus;
+      if (!_isConnected) {
+        _connectedDevice = null;
+      }
+      debugPrint('Connection check: $_isConnected');
       return _isConnected;
     } catch (e) {
       debugPrint('Error checking connection: $e');
+      _isConnected = false;
+      _connectedDevice = null;
       return false;
     }
+  }
+
+  /// Try to reconnect to the last known device
+  Future<bool> tryReconnect() async {
+    if (_connectedDevice != null) {
+      debugPrint('Attempting to reconnect to ${_connectedDevice!.name}');
+      return await connect(_connectedDevice!);
+    }
+    return false;
   }
 
   Future<bool> printReceipt({
@@ -203,9 +231,8 @@ class PrintService {
       bytes += [0x0A, 0x0A, 0x0A, 0x0A];
       bytes += [0x1D, 0x56, 0x00]; // Cut
 
-      final result = await PrintBluetoothThermal.writeBytes(
-        Uint8List.fromList(bytes),
-      );
+      // Use writeString for text-based printing which is more reliable
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
       debugPrint('Print result: $result');
       return result;
     } catch (e) {
@@ -245,9 +272,7 @@ class PrintService {
       bytes += [0x0A, 0x0A, 0x0A, 0x0A];
       bytes += [0x1D, 0x56, 0x00]; // Cut
 
-      final result = await PrintBluetoothThermal.writeBytes(
-        Uint8List.fromList(bytes),
-      );
+      final result = await PrintBluetoothThermal.writeBytes(bytes);
       debugPrint('Test print result: $result');
       return result;
     } catch (e) {

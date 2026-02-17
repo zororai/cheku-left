@@ -836,10 +836,6 @@ class _StockScreenState extends State<StockScreen> {
   }
 
   void _showStockInventory(ProductProvider productProvider) {
-    final outOfStock = productProvider.outOfStockProducts;
-    final lowStock = productProvider.lowStockProducts;
-    final products = productProvider.activeProducts;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF16213E),
@@ -849,54 +845,62 @@ class _StockScreenState extends State<StockScreen> {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
-        builder: (context, scrollController) => Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const Text(
-                    'Stock Inventory',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+        builder: (context, scrollController) => Consumer<ProductProvider>(
+          builder: (context, provider, _) {
+            final outOfStock = provider.outOfStockProducts;
+            final lowStock = provider.lowStockProducts;
+            final products = provider.activeProducts;
+
+            return Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Stock Inventory',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white54),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white54),
-                    onPressed: () => Navigator.pop(ctx),
+                ),
+                if (outOfStock.isNotEmpty)
+                  _buildStockAlertBanner(
+                    'Out of Stock',
+                    '${outOfStock.length} product(s)',
+                    Colors.red,
+                    Icons.warning,
                   ),
-                ],
-              ),
-            ),
-            if (outOfStock.isNotEmpty)
-              _buildStockAlertBanner(
-                'Out of Stock',
-                '${outOfStock.length} product(s)',
-                Colors.red,
-                Icons.warning,
-              ),
-            if (lowStock.isNotEmpty)
-              _buildStockAlertBanner(
-                'Low Stock',
-                '${lowStock.length} product(s)',
-                Colors.orange,
-                Icons.info,
-              ),
-            Expanded(
-              child: ListView.builder(
-                controller: scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-                  return _buildStockInventoryCard(product, productProvider);
-                },
-              ),
-            ),
-          ],
+                if (lowStock.isNotEmpty)
+                  _buildStockAlertBanner(
+                    'Low Stock',
+                    '${lowStock.length} product(s)',
+                    Colors.orange,
+                    Icons.info,
+                  ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: products.length,
+                    itemBuilder: (context, index) {
+                      final product = products[index];
+                      return _buildStockInventoryCard(product, provider);
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1108,25 +1112,35 @@ class _StockScreenState extends State<StockScreen> {
       ),
     );
 
-    if (result != null) {
+    if (result != null && mounted) {
       final auth = context.read<AuthProvider>();
+      final provider = context.read<ProductProvider>();
+
+      bool updated = false;
 
       if (result['addStock']! > 0) {
-        await productProvider.addStock(
+        final success = await provider.addStock(
           product.id!,
           result['addStock']!,
           butcherId: auth.butcherId,
         );
+        updated = success;
       }
 
       if (result['minAlert'] != product.minStockAlertGrams) {
-        final updated = product.copyWith(
+        // Refresh product from provider to get latest data
+        final currentProduct = provider.products.firstWhere(
+          (p) => p.id == product.id,
+          orElse: () => product,
+        );
+        final updatedProduct = currentProduct.copyWith(
           minStockAlertGrams: result['minAlert'],
         );
-        await productProvider.updateProduct(updated);
+        final success = await provider.updateProduct(updatedProduct);
+        updated = updated || success;
       }
 
-      if (mounted) {
+      if (mounted && updated) {
         _showSuccess('Stock updated successfully!');
       }
     }
