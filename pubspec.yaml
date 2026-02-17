@@ -37,6 +37,9 @@ dependencies:
   # Device Info for License
   device_info_plus: ^10.1.0
   
+  # URL Launcher
+  url_launcher: ^6.2.1
+  
   # Image Picker for Logo
   image_picker: ^1.0.7
   image_picker_windows: ^0.2.1

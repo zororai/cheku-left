@@ -230,9 +230,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: Colors.red,
                                 ),
                                 const SizedBox(width: 8),
-                                Text(
-                                  _errorMessage!,
-                                  style: const TextStyle(color: Colors.red),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
                                 ),
                               ],
                             ),
@@ -276,11 +278,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'Offline mode: admin / admin123',
-                  style: TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],
             ),

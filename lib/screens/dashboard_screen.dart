@@ -14,6 +14,7 @@ import 'sync_screen.dart';
 import 'settings_screen.dart';
 import 'printer_screen.dart';
 import 'stock_screen.dart';
+import 'about_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -365,6 +366,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       );
     }
+
+    // About Us - available to all
+    cards.add(
+      _DashboardCard(
+        icon: Icons.info_outline,
+        title: 'About Us',
+        subtitle: 'Support & Info',
+        color: const Color(0xFF9E9E9E),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AboutScreen()),
+        ),
+      ),
+    );
 
     return cards;
   }
